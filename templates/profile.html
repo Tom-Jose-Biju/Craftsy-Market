@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Profile - Craftsy Market</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        .navbar-brand {
+            font-family: 'Brush Script MT', cursive;
+            font-size: 2.5rem;
+            color: #ff6b6b !important;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+        .navbar-brand:hover {
+            color: #ff9ff3 !important;
+            transform: scale(1.05);
+        }
+        .navbar-dark .navbar-nav .nav-link {
+            color: #fff;
+        }
+        .profile-container {
+            background-color: rgba(26, 26, 26, 0.8);
+            border-radius: 15px;
+            padding: 40px;
+            margin-top: 80px;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
+        }
+        .profile-header h2 {
+            font-family: 'Brush Script MT', cursive;
+            font-size: 3rem;
+            color: #ff6b6b;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .profile-image img {
+            border-radius: 50%;
+            max-width: 150px;
+            max-height: 150px;
+            border: 3px solid #ff6b6b;
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.3);
+        }
+        .form-control {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 25px;
+            color: #fff;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+        .form-control:focus {
+            background-color: rgba(255, 255, 255, 0.2);
+            box-shadow: none;
+            color: #fff;
+        }
+        .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .btn-primary {
+            background-color: #ff6b6b;
+            border: none;
+            border-radius: 25px;
+            color: #fff;
+            font-weight: bold;
+            padding: 12px 30px;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #ff9ff3;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(255, 107, 107, 0.3);
+        }
+        .links a {
+            color: #ff6b6b;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .links a:hover {
+            color: #ff9ff3;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">Craftsy</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'home' %}">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'products' %}">Products</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'profile' %}">Profile</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'logout' %}">Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container profile-container">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="profile-header">
+                    <h2>{{ user.username }}</h2>
+                </div>
+                <div class="profile-image text-center mb-4">
+                    {% if profile.profile_image %}
+                        <img src="{{ profile.profile_image.url }}" alt="Profile Image" class="img-fluid">
+                    {% else %}
+                        <img src="https://via.placeholder.com/150" alt="Profile Image" class="img-fluid">
+                    {% endif %}
+                </div>
+                <form method="post" action="{% url 'profile' %}" enctype="multipart/form-data" class="mb-4">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label for="profile_image" class="form-label">Change Profile Image</label>
+                        <input type="file" id="profile_image" name="profile_image" class="form-control">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Update Image</button>
+                </form>
+                <div class="profile-details">
+                    <p><strong>Email:</strong> {{ user.email }}</p>
+                    <button type="button" class="btn btn-danger mt-3" onclick="confirmDeactivation()">Deactivate Account</button>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <h3 class="mb-4">Update Address Information</h3>
+                <form method="post" action="{% url 'profile' %}">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="street_address">Street Address</label>
+                                <input type="text" id="street_address" name="street_address" class="form-control" value="{{ profile.street_address }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="city">City</label>
+                                <input type="text" id="city" name="city" class="form-control" value="{{ profile.city }}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="state">State</label>
+                                <input type="text" id="state" name="state" class="form-control" value="{{ profile.state }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="postal_code">Postal Code</label>
+                                <input type="text" id="postal_code" name="postal_code" class="form-control" value="{{ profile.postal_code }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="country">Country</label>
+                                <input type="text" id="country" name="country" class="form-control" value="{{ profile.country }}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone_number">Phone Number</label>
+                        <input type="text" id="phone_number" name="phone_number" class="form-control" placeholder="+91" value="{{ profile.phone_number }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Address</button>
+                </form>
+            </div>
+        </div>
+        <div class="links text-center mt-4">
+            <a href="{% url 'home' %}">Back To Home</a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function confirmDeactivation() {
+            if (confirm("Are you sure you want to deactivate your account? This action cannot be undone.")) {
+                fetch("{% url 'deactivate_account' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("Your account has been deactivated. You will be logged out now.");
+                        window.location.href = "{% url 'home' %}";
+                    } else {
+                        alert("There was an error deactivating your account. Please try again later.");
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert("An unexpected error occurred. Please try again later.");
+                });
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+from django import forms
+from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
+
+from .models import Artisan, Product, ProductImage, Profile
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+class MultipleFileField(forms.FileField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            result = [single_file_clean(d, initial) for d in data]
+        else:
+            result = single_file_clean(data, initial)
+        return result
+
+class ProfileForm(forms.ModelForm):
+    phone_regex = RegexValidator(
+        regex=r'^\+?1?\d{9,15}$',
+        message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed."
+    )
+    phone_number = forms.CharField(validators=[phone_regex], max_length=17)
+
+    class Meta:
+        model = Profile
+        fields = ['street_address', 'city', 'state', 'postal_code', 'country', 'profile_image', 'phone_number']
+        widgets = {
+            'street_address': forms.TextInput(attrs={'placeholder': 'Street Address', 'class': 'form-control'}),
+            'city': forms.TextInput(attrs={'placeholder': 'City', 'class': 'form-control'}),
+            'state': forms.TextInput(attrs={'placeholder': 'State', 'class': 'form-control'}),
+            'postal_code': forms.TextInput(attrs={'placeholder': 'Postal Code', 'class': 'form-control'}),
+            'country': forms.TextInput(attrs={'placeholder': 'Country', 'class': 'form-control'}),
+            'profile_image': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
+            'phone_number': forms.TextInput(attrs={'placeholder': 'Phone Number', 'class': 'form-control'}),
+        }
+
+    def clean_postal_code(self):
+        postal_code = self.cleaned_data.get('postal_code')
+        if not postal_code.isdigit():
+            raise forms.ValidationError("Postal code should contain only digits.")
+        return postal_code
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['profile_image'].required = False
+
+class ArtisanProfileForm(forms.ModelForm):
+    class Meta:
+        model = Artisan
+        fields = ['bio', 'phone', 'address', 'city', 'state', 'country', 'postal_code', 'profile_picture']
+        widgets = {
+            'bio': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'address': forms.TextInput(attrs={'class': 'form-control'}),
+            'city': forms.TextInput(attrs={'class': 'form-control'}),
+            'state': forms.TextInput(attrs={'class': 'form-control'}),
+            'country': forms.TextInput(attrs={'class': 'form-control'}),
+            'postal_code': forms.TextInput(attrs={'class': 'form-control'}),
+            'profile_picture': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
+        }
+
+class ProductForm(forms.ModelForm):
+    images = MultipleFileField(required=False)
+
+    class Meta:
+        model = Product
+        fields = ['name', 'description', 'price', 'category', 'inventory']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'price': forms.NumberInput(attrs={'class': 'form-control'}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
+            'inventory': forms.NumberInput(attrs={'class': 'form-control'}),
+        }
+
+    def clean_price(self):
+        price = self.cleaned_data.get('price')
+        if price <= 0:
+            raise forms.ValidationError("Price must be greater than zero.")
+        return price
+
+    def clean_inventory(self):
+        inventory = self.cleaned_data.get('inventory')
+        if inventory < 0:
+            raise forms.ValidationError("Inventory cannot be negative.")
+        return inventory
+
+def save(self, commit=True):
+        instance = super().save(commit=False)
+        if commit:
+            instance.save()
+            for image in self.cleaned_data.get('images', []):
+                ProductImage.objects.create(product=instance, image=image)
+        return instance

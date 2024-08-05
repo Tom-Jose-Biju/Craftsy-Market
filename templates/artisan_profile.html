@@ -1,0 +1,176 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artisan Profile - Craftsy Market</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        .navbar-brand {
+            font-family: 'Brush Script MT', cursive;
+            font-size: 2.5rem;
+            color: #ff6b6b !important;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+        .profile-container {
+            background-color: rgba(26, 26, 26, 0.8);
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            margin-top: 80px;
+        }
+        .profile-picture {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 5px solid #ff6b6b;
+        }
+        .form-control {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 25px;
+            color: #fff;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+        .form-control:focus {
+            background-color: rgba(255, 255, 255, 0.2);
+            box-shadow: none;
+            color: #fff;
+        }
+        .btn-primary {
+            background-color: #ff6b6b;
+            border: none;
+            border-radius: 25px;
+            color: #fff;
+            font-weight: bold;
+            padding: 12px 30px;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #ff9ff3;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(255, 107, 107, 0.3);
+        }
+        .info-section, .form-section {
+            background-color: rgba(34, 34, 34, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        h3 {
+            color: #ff6b6b;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'artisan' %}">Craftsy</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan' %}">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan_products' %}">My Products</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'logout' %}">Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-8 offset-md-2 profile-container">
+                <div class="profile-header text-center mb-4">
+                    {% if artisan.profile_picture %}
+                    <img src="{{ artisan.profile_picture.url }}" alt="Profile Picture" class="profile-picture mb-3">
+                {% else %}
+                    <img src="default_profile.png" alt="Default Profile Picture" class="profile-picture mb-3">
+                {% endif %}
+                    <h2>{{ artisan.user.username }}</h2>
+                    <p class="text-muted">{{ artisan.bio }}</p>
+                </div>
+                
+                <div class="info-section">
+                    <h3>Current Information</h3>
+                    <p><strong>Phone:</strong> {{ artisan.phone|default:"Not provided" }}</p>
+                    <p><strong>Address:</strong> {{ artisan.address|default:"Not provided" }}</p>
+                    <p><strong>City:</strong> {{ artisan.city|default:"Not provided" }}</p>
+                    <p><strong>State/Province:</strong> {{ artisan.state|default:"Not provided" }}</p>
+                    <p><strong>Country:</strong> {{ artisan.country|default:"Not provided" }}</p>
+                    <p><strong>Postal Code:</strong> {{ artisan.postal_code|default:"Not provided" }}</p>
+                </div>
+
+                <div class="form-section">
+                    <h3>Update Profile Picture</h3>
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <input type="file" class="form-control" id="profilePicture" name="profile_picture">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Picture</button>
+                    </form>
+                </div>
+
+                <div class="form-section">
+                    <h3>Update Contact Information</h3>
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="bio" class="form-label">Bio</label>
+                            <textarea class="form-control" id="bio" name="bio" rows="3">{{ artisan.bio }}</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="phone" class="form-label">Phone Number (with country code)</label>
+                            <input type="tel" class="form-control" id="phone" name="phone" placeholder="+1 (123) 456-7890" value="{{ artisan.phone }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="address" class="form-label">Address</label>
+                            <textarea class="form-control" id="address" name="address" rows="3">{{ artisan.address }}</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="city" class="form-label">City</label>
+                            <input type="text" class="form-control" id="city" name="city" value="{{ artisan.city }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="state" class="form-label">State/Province</label>
+                            <input type="text" class="form-control" id="state" name="state" value="{{ artisan.state }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="country" class="form-label">Country</label>
+                            <input type="text" class="form-control" id="country" name="country" value="{{ artisan.country }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="postal_code" class="form-label">Postal Code</label>
+                            <input type="text" class="form-control" id="postal_code" name="postal_code" value="{{ artisan.postal_code }}">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Information</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
