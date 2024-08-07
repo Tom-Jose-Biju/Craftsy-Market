@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+SITE_ID = 1
 # Stripe settings
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
@@ -47,7 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.sites',
     'accounts',
     'widget_tweaks',
-    
+    'social_django',
 ]
 
 
@@ -58,9 +59,18 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-   
+    'social_django.middleware.SocialAuthExceptionMiddleware',
+    
 ]
 
+
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.google.GoogleOAuth2',
+    'django.contrib.auth.backends.ModelBackend',
+)
+
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.getenv('Google_Client_ID')
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.getenv('Google_Client_Secret')
 
 ROOT_URLCONF = 'craftsy.urls'
 
@@ -76,13 +86,13 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.csrf',
-
-
+                'social_django.context_processors.backends',
+                'social_django.context_processors.login_redirect',
             ],
         },
     },
 ]
-SITE_ID = 1
+
 
 WSGI_APPLICATION = 'craftsy.wsgi.application'
 
@@ -144,3 +154,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # Or your email provider's SMTP server
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'tomjosebiju@gmai.com'
+EMAIL_HOST_PASSWORD = 'Kozhmannil2002'
+
+LOGIN_REDIRECT_URL = 'home'

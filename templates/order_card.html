@@ -1,0 +1,13 @@
+<div class="order-card">
+    <h5>Order #{{ order.id }}</h5>
+    <p>Date: {{ order.created_at|date:"F d, Y" }}</p>
+    <p>Status: {{ order.get_status_display }}</p>
+    <p>Total: ${{ order.total_price }}</p>
+    <h6>Items:</h6>
+    <ul>
+        {% for item in order.items.all %}
+            <li>{{ item.product.name }} (x{{ item.quantity }}) - ${{ item.price }}</li>
+        {% endfor %}
+    </ul>
+    <a href="{% url 'order_detail' order.id %}" class="btn btn-primary btn-sm">View Details</a>
+</div>

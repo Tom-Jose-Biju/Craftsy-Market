@@ -180,17 +180,17 @@
             font-size: 0.8em;
         }
         
-        #cartToggle {
-            position: fixed;
-            top: 86px;
-            right: 20px;
-            z-index: 1001;
+
+        .btn-add-to-wishlist {
+            background-color: #ff9ff3;
+            border: none;
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+    
+        .btn-add-to-wishlist:hover {
             background-color: #ff6b6b;
             color: #fff;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 50%;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         }
     </style>
 </head>
@@ -208,6 +208,12 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'products' %}">Products</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'wishlist' %}">Wishlist</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'cart' %}">Cart</a>
                     </li>
                     <!-- Add other navigation items as needed -->
                 </ul>
@@ -252,6 +258,9 @@
                     </div>
                     <button class="btn btn-add-to-cart btn-lg" onclick="addToCart()">
                         <i class="fas fa-shopping-cart me-2"></i>Add to Cart
+                    </button>
+                    <button class="btn btn-add-to-wishlist btn-lg" onclick="addToWishlist()">
+                        <i class="fas fa-heart me-2"></i>Add to Wishlist
                     </button>
                 </div>
             </div>
@@ -307,26 +316,60 @@
                 updatePrice();
             }
         }
+
+        function addToWishlist() {
+            const productId = {{ product.id }};
+    
+            $.ajax({
+                url: "{% url 'add_to_wishlist' %}",
+                method: "POST",
+                data: {
+                    product_id: productId,
+                    csrfmiddlewaretoken: "{{ csrf_token }}"
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert("Product added to wishlist successfully!");
+                    } else {
+                        alert(response.error || "Error adding product to wishlist. Please try again.");
+                    }
+                },
+                error: function() {
+                    alert("An unexpected error occurred. Please try again later.");
+                }
+            });
+        }
     
         function addToCart() {
             const quantity = parseInt($('#quantity').val());
-            const existingItem = cart.find(item => item.id === {{ product.id }});
-    
-            if (existingItem) {
-                existingItem.quantity += quantity;
-            } else {
-                cart.push({
-                    id: {{ product.id }},
-                    name: "{{ product.name }}",
-                    price: basePrice,
-                    quantity: quantity
-                });
-            }
-    
-            updateCartDisplay();
-            $('#cartModal').modal('show');
+            const productId = {{ product.id }};
+        
+            $.ajax({
+                url: "{% url 'add_to_cart' %}",
+                method: "POST",
+                data: {
+                    product_id: productId,
+                    quantity: quantity,
+                    csrfmiddlewaretoken: "{{ csrf_token }}"
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert("Product added to cart successfully!");
+                        updateCartDisplay();  // Add this line to update the cart display
+                    } else {
+                        if (response.error === "AnonymousUser") {
+                            alert("Please log in to add items to your cart.");
+                        } else {
+                            alert("Error adding product to cart: " + (response.error || "Unknown error"));
+                        }
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error("AJAX error:", status, error);
+                    alert("An unexpected error occurred. Please try again later.");
+                }
+            });
         }
-    
         function updateCartDisplay() {
             const cartItems = $('#cartItems');
             cartItems.empty();
@@ -414,25 +457,5 @@
             updateCartToggle();
         });
     </script>
-<div class="modal fade cart-modal" id="cartModal" tabindex="-1" aria-labelledby="cartModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="cartModalLabel">Your Cart</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="cartItems"></div>
-                <div class="cart-total text-end mt-3">
-                    <strong>Total: $<span id="cartTotal">0.00</span></strong>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" onclick="checkout()">Checkout</button>
-            </div>
-        </div>
-    </div>
-</div>
 </body>
 </html>

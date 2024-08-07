@@ -1,8 +1,9 @@
 from django import forms
+from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 
-from .models import Artisan, Product, ProductImage, Profile
+from .models import Artisan, Product, ProductImage, Profile, User
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -41,11 +42,13 @@ class ProfileForm(forms.ModelForm):
             'phone_number': forms.TextInput(attrs={'placeholder': 'Phone Number', 'class': 'form-control'}),
         }
 
-    def clean_postal_code(self):
-        postal_code = self.cleaned_data.get('postal_code')
-        if not postal_code.isdigit():
-            raise forms.ValidationError("Postal code should contain only digits.")
-        return postal_code
+def clean_postal_code(self):
+    postal_code = self.cleaned_data.get('postal_code')
+    if postal_code is None:
+        raise forms.ValidationError("Postal code is required.")
+    if not postal_code.isdigit():
+        raise forms.ValidationError("Postal code should contain only digits.")
+    return postal_code
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -92,10 +95,23 @@ class ProductForm(forms.ModelForm):
             raise forms.ValidationError("Inventory cannot be negative.")
         return inventory
 
-def save(self, commit=True):
-        instance = super().save(commit=False)
+class UserRegistrationForm(UserCreationForm):
+    email = forms.EmailField(required=True)
+
+    class Meta:
+        model = User
+        fields = ('first_name','username', 'email', 'password1', 'password2')
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data['email']
         if commit:
-            instance.save()
-            for image in self.cleaned_data.get('images', []):
-                ProductImage.objects.create(product=instance, image=image)
-        return instance
+            user.save()
+        return user
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError("Email is already in use.")
+        return email
+    

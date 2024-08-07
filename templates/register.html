@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register | Craftsy Market</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
     <style>
         body {
             background-color: #000;
@@ -88,17 +89,21 @@
     <div class="register-container">
         <h2>Join Craftsy</h2>
         {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-danger" role="alert">
-                    {{ message }}
-                </div>
-            {% endfor %}
+        {% for message in messages %}
+            <div class="alert alert-danger" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
         {% endif %}
         <form method="post" id="registrationForm" action="{% url 'register' %}">
             {% csrf_token %}
             <div class="mb-3">
-                <input type="text" class="form-control" name="name" id="name" placeholder="Name" required>
+                <input type="text" class="form-control" name="first_name" id="name" placeholder="Name" required>
                 <div class="error" id="nameError"></div>
+            </div>
+            <div class="mb-3">
+                <input type="text" class="form-control" name="username" id="username" placeholder="Username" required>
+                <div class="error" id="usernameError"></div>
             </div>
             <div class="mb-3">
                 <input type="email" class="form-control" name="email" id="email" placeholder="Email" required>
@@ -122,7 +127,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
+     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.getElementById('registrationForm');
             const nameInput = document.getElementById('name');
@@ -133,39 +138,61 @@
             const emailError = document.getElementById('emailError');
             const password1Error = document.getElementById('password1Error');
             const password2Error = document.getElementById('password2Error');
-
-            form.addEventListener('submit', (e) => {
-                let isValid = true;
-
+    
+            function validateName() {
                 if (nameInput.value.trim() === '') {
                     nameError.textContent = 'Name is required';
-                    isValid = false;
+                    return false;
+                } else if (nameInput.value.length < 2) {
+                    nameError.textContent = 'Name must be at least 2 characters long';
+                    return false;
                 } else {
                     nameError.textContent = '';
+                    return true;
                 }
-
+            }
+    
+            function validateEmail() {
                 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!emailInput.value.match(emailPattern)) {
                     emailError.textContent = 'Enter a valid email address';
-                    isValid = false;
+                    return false;
                 } else {
                     emailError.textContent = '';
+                    return true;
                 }
-
+            }
+    
+            function validatePassword1() {
                 if (password1Input.value.length < 8) {
                     password1Error.textContent = 'Password must be at least 8 characters';
-                    isValid = false;
+                    return false;
+                } else if (!/\d/.test(password1Input.value) || !/[a-zA-Z]/.test(password1Input.value)) {
+                    password1Error.textContent = 'Password must contain both letters and numbers';
+                    return false;
                 } else {
                     password1Error.textContent = '';
+                    return true;
                 }
-
+            }
+    
+            function validatePassword2() {
                 if (password1Input.value !== password2Input.value) {
                     password2Error.textContent = 'Passwords do not match';
-                    isValid = false;
+                    return false;
                 } else {
                     password2Error.textContent = '';
+                    return true;
                 }
-
+            }
+    
+            nameInput.addEventListener('input', validateName);
+            emailInput.addEventListener('input', validateEmail);
+            password1Input.addEventListener('input', validatePassword1);
+            password2Input.addEventListener('input', validatePassword2);
+    
+            form.addEventListener('submit', (e) => {
+                const isValid = validateName() && validateEmail() && validatePassword1() && validatePassword2();
                 if (!isValid) {
                     e.preventDefault();
                 }

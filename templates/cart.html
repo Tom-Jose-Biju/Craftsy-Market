@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Cart - Craftsy</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Add your custom styles here */
+        body {
+            background-color: #000;
+            color: #fff;
+        }
+        .cart-item {
+            background-color: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .btn-remove {
+            background-color: #dc3545;
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">Craftsy</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'home' %}">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'products' %}">Products</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'wishlist' %}">Wishlist</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'cart' %}">Cart</a>
+                    </li>
+                    <!-- Add other navigation items as needed -->
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h1 class="mb-4">Your Cart</h1>
+        <div id="cartItems"></div>
+        <div class="cart-total text-end mt-3">
+            <strong>Total: $<span id="cartTotal">0.00</span></strong>
+        </div>
+        <div class="text-end mt-3">
+            <button type="button" class="btn btn-primary" onclick="checkout()">Checkout</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+
+    <!-- ... (previous code remains the same) ... -->
+
+<script>
+    function updateCartDisplay() {
+        $.ajax({
+            url: "{% url 'get_cart' %}",
+            method: "GET",
+            success: function(response) {
+                const cartItems = $('#cartItems');
+                cartItems.empty();
+                let total = 0;
+    
+                response.cart_items.forEach(item => {
+                    const itemTotal = item.price * item.quantity;
+                    total += itemTotal;
+    
+                    cartItems.append(`
+                        <div class="cart-item">
+                            <div class="cart-item-details">
+                                <div>
+                                    <div class="cart-item-name">${item.name}</div>
+                                    <div class="cart-item-price">$${item.price.toFixed(2)} x ${item.quantity}</div>
+                                </div>
+                                <button class="btn-remove" onclick="removeFromCart(${item.id})">Remove</button>
+                            </div>
+                            <div class="cart-item-quantity">
+                                <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity - 1})">-</button>
+                                <span>${item.quantity}</span>
+                                <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity + 1})">+</button>
+                            </div>
+                        </div>
+                    `);
+                });
+    
+                $('#cartTotal').text(total.toFixed(2));
+                updateCartToggle();
+            },
+            error: function(xhr, status, error) {
+                console.error("Error fetching cart data:", status, error);
+            }
+        });
+    }
+
+    function updateCartItemQuantity(productId, newQuantity) {
+        $.ajax({
+            url: "{% url 'update_cart_quantity' %}",
+            method: "POST",
+            data: {
+                product_id: productId,
+                quantity: newQuantity,
+                csrfmiddlewaretoken: "{{ csrf_token }}"
+            },
+            success: function(response) {
+                if (response.success) {
+                    updateCartDisplay();
+                } else {
+                    alert("Error updating cart. Please try again.");
+                }
+            },
+            error: function() {
+                alert("An unexpected error occurred. Please try again later.");
+            }
+        });
+    }
+
+    function removeFromCart(productId) {
+        $.ajax({
+            url: "{% url 'remove_from_cart' %}",
+            method: "POST",
+            data: {
+                product_id: productId,
+                csrfmiddlewaretoken: "{{ csrf_token }}"
+            },
+            success: function(response) {
+                if (response.success) {
+                    updateCartDisplay();
+                } else {
+                    alert("Error removing item from cart. Please try again.");
+                }
+            },
+            error: function() {
+                alert("An unexpected error occurred. Please try again later.");
+            }
+        });
+    }
+
+    function checkout() {
+        console.log("Checkout function called");
+        $.ajax({
+            url: "{% url 'create_checkout_session' %}",
+            method: "POST",
+            data: {
+                csrfmiddlewaretoken: "{{ csrf_token }}"
+            },
+            success: function(response) {
+                console.log("Checkout response:", response);
+                if (response.success) {
+                    var stripe = Stripe('{{ stripe_publishable_key }}');
+                    stripe.redirectToCheckout({
+                        sessionId: response.session_id
+                    }).then(function (result) {
+                        if (result.error) {
+                            console.error("Stripe error:", result.error);
+                            alert(result.error.message);
+                        }
+                    });
+                } else {
+                    console.error("Checkout error:", response.error);
+                    alert("Error creating checkout session: " + response.error);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error("AJAX error:", status, error);
+                alert("An unexpected error occurred. Please try again later.");
+            }
+        });
+    }
+
+    $(document).ready(function() {
+        updateCartDisplay();
+    });
+</script>
+
+</body>
+</html>
