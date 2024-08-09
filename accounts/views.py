@@ -19,6 +19,7 @@ from .models import Cart, CartItem, Product
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.shortcuts import get_object_or_404
+from .models import Category
 
 
 
@@ -196,7 +197,8 @@ def add_product(request):
 
 def products(request):
     products = Product.objects.all()
-    return render(request, 'products.html', {'products': products})
+    categories = Category.objects.all()
+    return render(request, 'products.html', {'products': products, 'categories': categories})
 
 @login_required
 def artisan_products(request):
