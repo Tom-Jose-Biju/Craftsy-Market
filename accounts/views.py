@@ -84,7 +84,7 @@ def admin_dashboard(request):
     total_users = User.objects.count()
     total_artisans = User.objects.filter(user_type='artisan').count()
     total_products = Product.objects.count()
-    recent_products = Product.objects.order_by('-created_at')[:5]
+    recent_products = Product.objects.select_related('artisan').order_by('-created_at')[:5]  # Fetch artisan data
     
     context = {
         'total_users': total_users,
@@ -252,7 +252,8 @@ def update_product(request, product_id):
         messages.error(request, "You don't have access to this page.")
         return redirect('home')
     
-    product = get_object_or_404(Product, id=product_id, artisan=request.user)
+    artisan = get_object_or_404(Artisan, user=request.user)  # Get the Artisan instance
+    product = get_object_or_404(Product, id=product_id, artisan=artisan)  # Use the Artisan instance
     
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES, instance=product)
@@ -277,7 +278,12 @@ def delete_product(request, product_id):
         messages.error(request, "You don't have access to this page.")
         return redirect('home')
     
-    product = get_object_or_404(Product, id=product_id, artisan=request.user)
+    # Get the Artisan instance
+    artisan = get_object_or_404(Artisan, user=request.user)
+    
+    # Now query the Product using the Artisan instance
+    product = get_object_or_404(Product, id=product_id, artisan=artisan)
+    
     product.delete()
     messages.success(request, "Product deleted successfully!")
     return redirect('artisan_products')

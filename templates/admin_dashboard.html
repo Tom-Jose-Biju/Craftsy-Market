@@ -8,12 +8,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
-            --primary-color: #3498db;
-            --secondary-color: #2c3e50;
+            --primary-color: #ff6b6b;
+            --secondary-color: #1a1a1a;
             --accent-color: #e74c3c;
-            --text-color: #333;
-            --bg-color: #f5f5f5;
-            --card-bg: #ffffff;
+            --text-color: #fff;
+            --bg-color: #121212;
+            --card-bg: #2c2c2c;
         }
         body {
             background-color: var(--bg-color);
@@ -22,17 +22,19 @@
         }
         .navbar {
             background-color: var(--secondary-color);
+            border-bottom: 2px solid var(--primary-color);
         }
         .navbar-brand {
             font-family: 'Arial', sans-serif;
             font-size: 1.5rem;
-            color: #fff !important;
+            color: var(--primary-color) !important;
             font-weight: bold;
         }
         .sidebar {
             background-color: var(--secondary-color);
             min-height: calc(100vh - 56px);
             padding-top: 20px;
+            border-right: 2px solid var(--primary-color);
         }
         .sidebar .nav-link {
             color: #fff;
@@ -40,7 +42,7 @@
             transition: all 0.3s ease;
         }
         .sidebar .nav-link:hover {
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: rgba(255, 107, 107, 0.3);
         }
         .sidebar .nav-link.active {
             background-color: var(--primary-color);
@@ -51,9 +53,9 @@
         .card {
             border: none;
             border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
             transition: transform 0.3s;
-            background-color: var(--card-bg);
+            background-color: white;
         }
         .card:hover {
             transform: translateY(-5px);
@@ -69,7 +71,7 @@
             overflow: hidden;
         }
         .table th {
-            background-color: var(--secondary-color);
+            background-color: var(--primary-color);
             color: #fff;
         }
     </style>
@@ -174,7 +176,7 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th>Artisan</th>
+                                <!-- <th>Artisan</th> -->
                                 <th>Price</th>
                                 <th>Created At</th>
                             </tr>
@@ -183,13 +185,44 @@
                             {% for product in recent_products %}
                             <tr>
                                 <td>{{ product.name }}</td>
-                                <td>{{ product.artisan.username }}</td>
+                                <!-- <td>{{ product.artisan.username }}</td> -->
                                 <td>${{ product.price }}</td>
                                 <td>{{ product.created_at|date:"M d, Y" }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+
+                <h2 class="mt-4 mb-4">Static Elements</h2>
+                <div class="row">
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <i class="fas fa-cogs card-icon"></i>
+                                <h5 class="card-title">Settings</h5>
+                                <p class="card-text">Manage your application settings.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <i class="fas fa-chart-pie card-icon"></i>
+                                <h5 class="card-title">Analytics</h5>
+                                <p class="card-text">View your analytics and reports.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <i class="fas fa-bell card-icon"></i>
+                                <h5 class="card-title">Notifications</h5>
+                                <p class="card-text">Check your notifications and alerts.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>

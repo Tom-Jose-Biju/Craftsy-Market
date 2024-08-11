@@ -8,12 +8,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
-            --primary-color: #3498db;
-            --secondary-color: #2c3e50;
-            --accent-color: #e74c3c;
-            --text-color: #333;
-            --bg-color: #f5f5f5;
-            --card-bg: #ffffff;
+            --primary-color: #ff6b6b;
+            --secondary-color: #1a1a1a;
+            --text-color: #fff;
+            --bg-color: #121212;
+            --card-bg: #2c2c2c;
         }
         body {
             background-color: var(--bg-color);
@@ -24,10 +23,7 @@
             background-color: var(--secondary-color);
         }
         .navbar-brand {
-            font-family: 'Arial', sans-serif;
-            font-size: 1.5rem;
-            color: #fff !important;
-            font-weight: bold;
+            color: var(--primary-color) !important;
         }
         .sidebar {
             background-color: var(--secondary-color);
@@ -36,11 +32,9 @@
         }
         .sidebar .nav-link {
             color: #fff;
-            padding: 10px 20px;
-            transition: all 0.3s ease;
         }
         .sidebar .nav-link:hover {
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: rgba(255, 107, 107, 0.3);
         }
         .sidebar .nav-link.active {
             background-color: var(--primary-color);
@@ -48,37 +42,21 @@
         .main-content {
             padding: 20px;
         }
-        .card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s;
-            background-color: var(--card-bg);
-        }
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        .card-icon {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            color: var(--primary-color);
-        }
         .table {
             background-color: var(--card-bg);
             border-radius: 10px;
             overflow: hidden;
         }
         .table th {
-            background-color: var(--secondary-color);
+            background-color: var(--primary-color);
             color: #fff;
         }
-
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">Craftsy Admin</a>
+            <a class="navbar-brand" href="{% url 'admin_dashboard' %}">Craftsy Admin</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -90,7 +68,6 @@
                 </ul>
             </div>
         </div>
-
     </nav>
 
     <div class="container-fluid">
@@ -109,7 +86,7 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'admin_artisans' %}">
+                            <a class="nav-link active" href="{% url 'admin_artisans' %}">
                                 <i class="fas fa-palette me-2"></i>Artisans
                             </a>
                         </li>

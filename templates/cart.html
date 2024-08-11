@@ -8,13 +8,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body {
-            background-color: #121212;
-            color: #e0e0e0;
+            background-color: #000;
+            color: #fff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         .navbar {
-            background-color: rgba(18, 18, 18, 0.9);
-            backdrop-filter: blur(10px);
+            background-color: rgba(0, 0, 0, 0.8);
         }
         .navbar-brand {
             font-family: 'Brush Script MT', cursive;
@@ -27,49 +26,58 @@
             color: #ff9ff3 !important;
             transform: scale(1.05);
         }
-        .navbar-dark .navbar-nav .nav-link {
-            color: #e0e0e0;
-            transition: color 0.3s ease;
-        }
-        .navbar-dark .navbar-nav .nav-link:hover {
-            color: #ff6b6b;
-        }
         .cart-container {
-            background-color: rgba(26, 26, 26, 0.8);
+            background-color: rgba(34, 34, 34, 0.8);
             border-radius: 15px;
             padding: 30px;
             margin-top: 80px;
-            box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .cart-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .cart-header h1 {
+            font-size: 2rem;
+            color: #ff6b6b;
         }
         .cart-item {
-            background-color: rgba(34, 34, 34, 0.8);
+            background-color: #1a1a1a;
             border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
             transition: all 0.3s ease;
         }
         .cart-item:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(255, 255, 255, 0.1);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+        }
+        .cart-item img {
+            width: 80px;
+            height: 80px;
+            border-radius: 5px;
+            margin-right: 15px;
         }
         .cart-item-details {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-grow: 1;
         }
         .cart-item-name {
-            font-size: 1.2rem;
+            font-size: 1.5rem;
             font-weight: bold;
             color: #ff6b6b;
         }
         .cart-item-price {
-            font-size: 1.1rem;
-            color: #e0e0e0;
+            font-size: 1.2rem;
+            color: #ddd;
         }
         .cart-item-quantity {
             display: flex;
             align-items: center;
-            margin-top: 10px;
         }
         .cart-item-quantity button {
             background-color: #ff6b6b;
@@ -78,19 +86,12 @@
             border-radius: 50%;
             width: 30px;
             height: 30px;
-            font-size: 1.2rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            font-size: 1rem;
             cursor: pointer;
             transition: all 0.3s ease;
         }
         .cart-item-quantity button:hover {
             background-color: #ff9ff3;
-        }
-        .cart-item-quantity span {
-            margin: 0 15px;
-            font-size: 1.2rem;
         }
         .btn-remove {
             background-color: transparent;
@@ -99,6 +100,7 @@
             padding: 5px 10px;
             border-radius: 5px;
             transition: all 0.3s ease;
+            margin-left: 10px;
         }
         .btn-remove:hover {
             background-color: #ff6b6b;
@@ -107,6 +109,8 @@
         .cart-total {
             font-size: 1.5rem;
             color: #ff6b6b;
+            text-align: right;
+            margin-top: 20px;
         }
         .btn-checkout {
             background-color: #ff6b6b;
@@ -116,18 +120,17 @@
             border-radius: 5px;
             font-size: 1.2rem;
             transition: all 0.3s ease;
+            width: 100%;
         }
         .btn-checkout:hover {
             background-color: #ff9ff3;
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
         }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
-            <a class="navbar-brand" href="{% url 'home' %}"></i>Craftsy</a>
+            <a class="navbar-brand" href="{% url 'home' %}">Craftsy</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -151,150 +154,140 @@
     </nav>
 
     <div class="container cart-container">
-        <h1 class="mb-4 text-center"><i class="fas fa-shopping-cart me-3"></i>Your Cart</h1>
+        <div class="cart-header">
+            <h1><i class="fas fa-shopping-cart me-2"></i>Your Cart</h1>
+        </div>
         <div id="cartItems"></div>
-        <div class="cart-total text-end mt-4">
+        <div class="cart-total">
             <strong>Total: $<span id="cartTotal">0.00</span></strong>
         </div>
-        <div class="text-end mt-4">
+        <div class="mt-4">
             <button type="button" class="btn-checkout" onclick="checkout()"><i class="fas fa-credit-card me-2"></i>Checkout</button>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://js.stripe.com/v3/"></script>
-
     <script>
-    function updateCartDisplay() {
-        $.ajax({
-            url: "{% url 'get_cart' %}",
-            method: "GET",
-            success: function(response) {
-                const cartItems = $('#cartItems');
-                cartItems.empty();
-                let total = 0;
-    
-                response.cart_items.forEach(item => {
-                    const itemTotal = item.price * item.quantity;
-                    total += itemTotal;
-    
-                    cartItems.append(`
-                        <div class="cart-item">
-                            <div class="cart-item-details">
-                                <div>
-                                    <img src="${item.image_url}" alt="${item.name}" style="width: 50px; height: 50px; margin-right: 10px;" />
-                                    <div class="cart-item-name"><i class="fas fa-gift me-2"></i>${item.name}</div>
-                                    <div class="cart-item-price"><i class="fas fa-tag me-2"></i>$${item.price.toFixed(2)} x ${item.quantity}</div>
+        function updateCartDisplay() {
+            $.ajax({
+                url: "{% url 'get_cart' %}",
+                method: "GET",
+                success: function(response) {
+                    const cartItems = $('#cartItems');
+                    cartItems.empty();
+                    let total = 0;
+
+                    response.cart_items.forEach(item => {
+                        const itemTotal = item.price * item.quantity;
+                        total += itemTotal;
+
+                        cartItems.append(`
+                            <div class="cart-item">
+                                <img src="${item.image_url}" alt="${item.name}" />
+                                <div class="cart-item-details">
+                                    <div class="cart-item-name">${item.name}</div>
+                                    <div class="cart-item-price">$${item.price.toFixed(2)} x ${item.quantity}</div>
                                 </div>
-                                <button class="btn-remove" onclick="removeFromCart(${item.id})"><i class="fas fa-trash-alt me-2"></i>Remove</button>
+                                <div class="cart-item-quantity">
+                                    <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity - 1})"><i class="fas fa-minus"></i></button>
+                                    <span>${item.quantity}</span>
+                                    <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity + 1})"><i class="fas fa-plus"></i></button>
+                                    <button class="btn-remove" onclick="removeFromCart(${item.id})"><i class="fas fa-trash-alt"></i></button>
+                                </div>
                             </div>
-                            <div class="cart-item-quantity">
-                                <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity - 1})"><i class="fas fa-minus"></i></button>
-                                <span>${item.quantity}</span>
-                                <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity + 1})"><i class="fas fa-plus"></i></button>
-                            </div>
-                        </div>
-                    `);
-                });
-    
-                $('#cartTotal').text(total.toFixed(2));
-                updateCartToggle();
-            },
-            error: function(xhr, status, error) {
-                console.error("Error fetching cart data:", status, error);
-            }
-        });
-    }
-
-    function updateCartItemQuantity(productId, newQuantity) {
-        if (productId) {
-            $.ajax({
-                url: "{% url 'update_cart_quantity' %}",
-                method: "POST",
-                data: {
-                    product_id: productId,
-                    quantity: newQuantity,
-                    csrfmiddlewaretoken: "{{ csrf_token }}"
-                },
-                success: function(response) {
-                    if (response.success) {
-                        updateCartDisplay();
-                    } else {
-                        alert("Error updating cart. Please try again.");
-                    }
-                },
-                error: function() {
-                    alert("An unexpected error occurred. Please try again later.");
-                }
-            });
-        } else {
-            console.error("Product ID is undefined");
-        }
-    }
-
-    function removeFromCart(productId) {
-        if (productId) {
-            $.ajax({
-                url: "{% url 'remove_from_cart' %}",
-                method: "POST",
-                data: {
-                    product_id: productId,
-                    csrfmiddlewaretoken: "{{ csrf_token }}"
-                },
-                success: function(response) {
-                    if (response.success) {
-                        updateCartDisplay();
-                    } else {
-                        alert("Error removing item from cart. Please try again.");
-                    }
-                },
-                error: function() {
-                    alert("An unexpected error occurred. Please try again later.");
-                }
-            });
-        } else {
-            console.error("Product ID is undefined");
-        }
-    }
-
-    function checkout() {
-        console.log("Checkout function called");
-        $.ajax({
-            url: "{% url 'create_checkout_session' %}",
-            method: "POST",
-            data: {
-                csrfmiddlewaretoken: "{{ csrf_token }}"
-            },
-            success: function(response) {
-                console.log("Checkout response:", response);
-                if (response.success) {
-                    var stripe = Stripe('{{ stripe_publishable_key }}');
-                    stripe.redirectToCheckout({
-                        sessionId: response.session_id
-                    }).then(function (result) {
-                        if (result.error) {
-                            console.error("Stripe error:", result.error);
-                            alert(result.error.message);
-                        }
+                        `);
                     });
-                } else {
-                    console.error("Checkout error:", response.error);
-                    alert("Error creating checkout session: " + response.error);
+
+                    $('#cartTotal').text(total.toFixed(2));
+                },
+                error: function(xhr, status, error) {
+                    console.error("Error fetching cart data:", status, error);
                 }
-            },
-            error: function(xhr, status, error) {
-                console.error("AJAX error:", status, error);
-                alert("An unexpected error occurred. Please try again later.");
+            });
+        }
+
+        function updateCartItemQuantity(productId, newQuantity) {
+            if (productId) {
+                $.ajax({
+                    url: "{% url 'update_cart_quantity' %}",
+                    method: "POST",
+                    data: {
+                        product_id: productId,
+                        quantity: newQuantity,
+                        csrfmiddlewaretoken: "{{ csrf_token }}"
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            updateCartDisplay();
+                        } else {
+                            alert("Error updating cart. Please try again.");
+                        }
+                    },
+                    error: function() {
+                        alert("An unexpected error occurred. Please try again later.");
+                    }
+                });
+            } else {
+                console.error("Product ID is undefined");
             }
+        }
+
+        function removeFromCart(productId) {
+            if (productId) {
+                $.ajax({
+                    url: "{% url 'remove_from_cart' %}",
+                    method: "POST",
+                    data: {
+                        product_id: productId,
+                        csrfmiddlewaretoken: "{{ csrf_token }}"
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            updateCartDisplay();
+                        } else {
+                            alert("Error removing item from cart. Please try again.");
+                        }
+                    },
+                    error: function() {
+                        alert("An unexpected error occurred. Please try again later.");
+                    }
+                });
+            } else {
+                console.error("Product ID is undefined");
+            }
+        }
+
+        function checkout() {
+            $.ajax({
+                url: "{% url 'create_checkout_session' %}",
+                method: "POST",
+                data: {
+                    csrfmiddlewaretoken: "{{ csrf_token }}"
+                },
+                success: function(response) {
+                    if (response.success) {
+                        var stripe = Stripe('{{ stripe_publishable_key }}');
+                        stripe.redirectToCheckout({
+                            sessionId: response.session_id
+                        }).then(function (result) {
+                            if (result.error) {
+                                alert(result.error.message);
+                            }
+                        });
+                    } else {
+                        alert("Error creating checkout session: " + response.error);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert("An unexpected error occurred. Please try again later.");
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            updateCartDisplay();
         });
-    }
-
-    $(document).ready(function() {
-        sessionStorage.setItem('currentPage', 'cart');
-        updateCartDisplay();
-    });
-</script>
-
+    </script>
 </body>
 </html>
