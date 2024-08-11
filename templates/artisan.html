@@ -115,6 +115,11 @@
 
     <div class="container mt-5">
         {% if user.is_authenticated %}
+            {% with user.username as username %}
+                <script>
+                    sessionStorage.setItem('username', '{{ username }}');
+                </script>
+            {% endwith %}
             <div class="info-section">
                 <h2>Welcome back, {{ user.username }}!</h2>
                 <p>Continue crafting and selling your unique products on Craftsy Market.</p>

@@ -183,6 +183,7 @@
                         <div class="cart-item">
                             <div class="cart-item-details">
                                 <div>
+                                    <img src="${item.image_url}" alt="${item.name}" style="width: 50px; height: 50px; margin-right: 10px;" />
                                     <div class="cart-item-name"><i class="fas fa-gift me-2"></i>${item.name}</div>
                                     <div class="cart-item-price"><i class="fas fa-tag me-2"></i>$${item.price.toFixed(2)} x ${item.quantity}</div>
                                 </div>
@@ -207,46 +208,54 @@
     }
 
     function updateCartItemQuantity(productId, newQuantity) {
-        $.ajax({
-            url: "{% url 'update_cart_quantity' %}",
-            method: "POST",
-            data: {
-                product_id: productId,
-                quantity: newQuantity,
-                csrfmiddlewaretoken: "{{ csrf_token }}"
-            },
-            success: function(response) {
-                if (response.success) {
-                    updateCartDisplay();
-                } else {
-                    alert("Error updating cart. Please try again.");
+        if (productId) {
+            $.ajax({
+                url: "{% url 'update_cart_quantity' %}",
+                method: "POST",
+                data: {
+                    product_id: productId,
+                    quantity: newQuantity,
+                    csrfmiddlewaretoken: "{{ csrf_token }}"
+                },
+                success: function(response) {
+                    if (response.success) {
+                        updateCartDisplay();
+                    } else {
+                        alert("Error updating cart. Please try again.");
+                    }
+                },
+                error: function() {
+                    alert("An unexpected error occurred. Please try again later.");
                 }
-            },
-            error: function() {
-                alert("An unexpected error occurred. Please try again later.");
-            }
-        });
+            });
+        } else {
+            console.error("Product ID is undefined");
+        }
     }
 
     function removeFromCart(productId) {
-        $.ajax({
-            url: "{% url 'remove_from_cart' %}",
-            method: "POST",
-            data: {
-                product_id: productId,
-                csrfmiddlewaretoken: "{{ csrf_token }}"
-            },
-            success: function(response) {
-                if (response.success) {
-                    updateCartDisplay();
-                } else {
-                    alert("Error removing item from cart. Please try again.");
+        if (productId) {
+            $.ajax({
+                url: "{% url 'remove_from_cart' %}",
+                method: "POST",
+                data: {
+                    product_id: productId,
+                    csrfmiddlewaretoken: "{{ csrf_token }}"
+                },
+                success: function(response) {
+                    if (response.success) {
+                        updateCartDisplay();
+                    } else {
+                        alert("Error removing item from cart. Please try again.");
+                    }
+                },
+                error: function() {
+                    alert("An unexpected error occurred. Please try again later.");
                 }
-            },
-            error: function() {
-                alert("An unexpected error occurred. Please try again later.");
-            }
-        });
+            });
+        } else {
+            console.error("Product ID is undefined");
+        }
     }
 
     function checkout() {
@@ -282,6 +291,7 @@
     }
 
     $(document).ready(function() {
+        sessionStorage.setItem('currentPage', 'cart');
         updateCartDisplay();
     });
 </script>

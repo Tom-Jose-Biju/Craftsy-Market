@@ -20,6 +20,8 @@ from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.shortcuts import get_object_or_404
 from .models import Category
+from django.db.models import Q
+
 
 
 
@@ -116,6 +118,24 @@ def admin_artisans(request):
     }
     return render(request, 'admin_artisans.html', context)
 
+@login_required
+def admin_add_category(request):
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
+    if request.method == 'POST':
+        category_name = request.POST.get('category_name')
+        if category_name:
+            Category.objects.create(name=category_name)
+            messages.success(request, f"Category '{category_name}' has been added successfully.")
+            return redirect('admin_add_category')
+        else:
+            messages.error(request, "Category name cannot be empty.")
+    
+    categories = Category.objects.all()
+    return render(request, 'admin_add_category.html', {'categories': categories})
+
 # Artisan Views
 def artisan_register(request):
     if request.method == 'POST':
@@ -140,25 +160,23 @@ def artisan_home(request):
 
 @login_required
 def artisan_profile(request):
-    if request.user.user_type != 'artisan':
-        messages.error(request, "You don't have access to this page.")
-        return redirect('home')
-    
-    try:
-        artisan = request.user.artisan
-    except ObjectDoesNotExist:
-        artisan = Artisan.objects.create(user=request.user)
+    artisan = get_object_or_404(Artisan, user=request.user)
     
     if request.method == 'POST':
-        form = ArtisanProfileForm(request.POST, request.FILES, instance=artisan)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Profile updated successfully')
-            return redirect('artisan_profile')
-    else:
-        form = ArtisanProfileForm(instance=artisan)
+        if 'profile_picture' in request.FILES:
+            artisan.profile_picture = request.FILES['profile_picture']
+            artisan.save()
+            messages.success(request, 'Profile picture updated successfully.')
+        else:
+            form = ArtisanProfileForm(request.POST, instance=artisan)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'Profile updated successfully.')
+            else:
+                messages.error(request, 'Error updating profile. Please check the form.')
     
-    return render(request, 'accounts/artisan_profile.html', {'artisan': artisan, 'form': form})
+    form = ArtisanProfileForm(instance=artisan)
+    return render(request, 'artisan_profile.html', {'artisan': artisan, 'form': form})
 
 def artisanview(request):
     return render(request, 'artisan.html')
@@ -198,7 +216,25 @@ def add_product(request):
 def products(request):
     products = Product.objects.all()
     categories = Category.objects.all()
-    return render(request, 'products.html', {'products': products, 'categories': categories})
+
+    search_query = request.GET.get('search')
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(artisan__user__username__icontains=search_query)
+        )
+
+    category_id = request.GET.get('category')
+    if category_id:
+        products = products.filter(category_id=category_id)
+
+    context = {
+        'products': products,
+        'categories': categories,
+        'search_query': search_query,
+    }
+    return render(request, 'products.html', context)
 
 @login_required
 def artisan_products(request):
@@ -395,7 +431,7 @@ def get_cart(request):
             'id': cart_item.product.id,
             'name': cart_item.product.name,
             'price': float(cart_item.product.price),
-            'quantity': cart_item.quantity
+            'quantity': cart_item.quantity,
         })
     return JsonResponse({'cart_items': cart_items})
 

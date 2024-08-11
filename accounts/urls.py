@@ -27,6 +27,7 @@ urlpatterns = [
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
     path('admin-dashboard/users/', views.admin_users, name='admin_users'),
     path('admin-dashboard/artisans/', views.admin_artisans, name='admin_artisans'),
+    path('admin-dashboard/add-category/', views.admin_add_category, name='admin_add_category'),
 
     
     path('deactivate-account/', views.deactivate_account, name='deactivate_account'),

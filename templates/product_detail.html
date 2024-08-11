@@ -467,6 +467,8 @@
             $('body').append('<button id="cartToggle" data-bs-toggle="modal" data-bs-target="#cartModal"><i class="fas fa-shopping-cart"></i> <span class="badge bg-danger">0</span></button>');
 
             updateCartToggle();
+
+            sessionStorage.setItem('currentPage', 'product_detail');
         });
     </script>
 </body>
