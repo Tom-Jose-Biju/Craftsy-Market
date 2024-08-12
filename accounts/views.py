@@ -55,18 +55,24 @@ def login_view(request):
         password = request.POST.get('password')
         user = authenticate(request, username=username, password=password)
         
+        # Debugging output
+        print(f"Username: {username}, Password: {password}, User: {user}")  # Check the authentication result
+        
         if user is not None:
             login(request, user)
             request.session['user_id'] = user.id
             request.session['username'] = user.username
+            
+            # Redirect based on user type
             if user.is_staff:
                 return redirect('admin_dashboard')
             elif user.user_type == 'artisan':
-                return redirect('artisan_home')
+                return redirect('artisan_home')  # Redirect to artisan home
             else:
                 return redirect('home')
         else:
-            messages.error(request, 'Invalid username or password')
+            messages.error(request, 'Invalid username or password')  # Error message for failed login
+
     return render(request, 'login.html')
 
 @login_required

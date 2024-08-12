@@ -10,20 +10,36 @@
 
     <style>
         body {
-            background-color: #f8f9fa; /* Light background for contrast */
-            color: #f2f4f7; /* Dark text */
+            background-color: #121212; /* Dark background for contrast */
+            color: #e0e0e0; /* Light text */
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            padding-top: 70px; /* Space for fixed navbar */
         }
         .navbar {
-            background-color: rgba(18, 18, 18, 0.9); /* Dark navbar with transparency */
-            backdrop-filter: blur(10px); /* Blur effect */
+            background-color: rgba(18, 18, 18, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        .navbar-brand {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 1.5rem;
+            color: #f0f0f0 !important;
+            transition: all 0.3s ease;
+        }
+        .navbar-brand:hover {
+            color: #831515 !important;
+            transform: scale(1.05);
+        }
+        .navbar-dark .navbar-nav .nav-link {
+            color: #e0e0e0;
+            transition: color 0.3s ease;
+        }
+        .navbar-dark .navbar-nav .nav-link:hover {
+            color: #801313;
         }
         .checkout-container {
             background-color: rgba(34, 34, 34, 0.9); /* Darker background */
             border-radius: 15px;
             padding: 30px;
-            margin: 20px auto; /* Centered with margin */
+            margin: 100px auto; /* Centered with margin */
             box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
             max-width: 800px;
             transition: transform 0.3s ease; /* Animation on hover */
@@ -37,7 +53,7 @@
         }
         .checkout-header h1 {
             font-size: 2.5rem; /* Larger title */
-            color: #ff6b6b;
+            color: #f1ecec;
             animation: fadeIn 0.5s; /* Fade-in animation */
         }
         .checkout-item {
@@ -53,7 +69,7 @@
         }
         .checkout-item-name {
             font-size: 1.5rem; /* Increased font size */
-            color: #ff6b6b;
+            color: #db1515;
         }
         .checkout-item-price {
             font-size: 1.5rem; /* Increased font size */
@@ -61,12 +77,12 @@
         }
         .total-price {
             font-size: 1.8rem; /* Larger total price */
-            color: #ff6b6b;
+            color: #e41a1a;
             text-align: right;
             margin-top: 20px;
         }
         .btn-confirm {
-            background-color: #ff6b6b;
+            background-color: #eb1111;
             color: #fff;
             border: none;
             padding: 15px 20px; /* Increased padding */
@@ -76,7 +92,7 @@
             width: 100%;
         }
         .btn-confirm:hover {
-            background-color: #ff9ff3;
+            background-color: #17bd12;
         }
         .payment-methods {
             margin-top: 30px;
@@ -84,19 +100,30 @@
         .payment-method {
             background-color: rgba(255, 255, 255, 0.1); /* Light background for contrast */
             border-radius: 10px;
-            padding: 20px;
+            padding: 15px; /* Adjusted padding */
             margin: 10px 0;
             transition: transform 0.3s, background-color 0.3s; /* Animation for hover */
             cursor: pointer; /* Pointer cursor on hover */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
         }
-        
         .payment-method:hover {
             transform: scale(1.05); /* Slightly enlarge on hover */
             background-color: rgba(255, 255, 255, 0.2); /* Change background on hover */
         }
-        
         .payment-icon {
-            margin-bottom: 10px; /* Space between icon and text */
+            margin-bottom: 5px; /* Space between icon and text */
+            width: 50px; /* Fixed width for icons */
+            height: 30px; /* Fixed height for icons */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .payment-icon img {
+            max-width: 100%;
+            height: auto;
         }
         @keyframes fadeIn {
             from { opacity: 0; }
@@ -147,22 +174,22 @@
             <!-- Cart items will be dynamically inserted here -->
         </div>
         <div class="total-price">
-            Total: $<span id="totalAmount">0.00</span>
+            Total: ₹<span id="totalAmount">0.00</span>
         </div>
         
         <div class="payment-methods">
             <h4 class="text-center mb-4">Select Payment Method</h4>
             <div class="row">
                 <div class="col-md-4">
-                    <div class="payment-method text-center">
+                    <div class="payment-method">
                         <div class="payment-icon">
-                            <img src="https://static.vecteezy.com/system/resources/thumbnails/000/357/048/small/3__2821_29.jpg" alt="Credit Card" class="img-fluid">
+                            <img src="https://png.pngtree.com/png-clipart/20191120/original/pngtree-credit-or-debit-card-icon-png-image_5060875.jpg" alt="Credit Card" class="img-fluid">
                         </div>
                         <span>Credit Card</span>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="payment-method text-center">
+                    <div class="payment-method">
                         <div class="payment-icon">
                             <img src="https://cdn4.iconfinder.com/data/icons/logos-and-brands/512/250_Paypal_logo-512.png" alt="PayPal" class="img-fluid">
                         </div>
@@ -170,80 +197,80 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="payment-method text-center">
+                    <div class="payment-method">
                         <div class="payment-icon">
                             <img src="https://cdn.icon-icons.com/icons2/2248/PNG/512/bank_transfer_icon_137913.png" alt="Bank Transfer" class="img-fluid">
                         </div>
-                        <span>Bank Transfer</span>
+                        <span>
+                            Bank Transfer</span>
                     </div>
+                    </div>
+                    </div>
+                    <button id="checkout-button" class="btn-confirm">Pay Now</button>
                 </div>
-            </div>
-        </div>
-
-        <button id="checkout-button" class="btn-confirm">Pay Now</button>
-    </div>
-
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script>
-        var stripe = Stripe('{{ stripe_publishable_key }}'); // Ensure this is set correctly
-
-        $('#checkout-button').on('click', function() {
-            $.ajax({
-                url: "{% url 'create_checkout_session' %}",
-                method: "POST",
-                data: {
-                    csrfmiddlewaretoken: "{{ csrf_token }}"
-                },
-                success: function(response) {
-                    if (response.success) {
-                        stripe.redirectToCheckout({ sessionId: response.session_id })
-                            .then(function (result) {
-                                if (result.error) {
-                                    alert(result.error.message);
+                
+                <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+                <script>
+                    var stripe = Stripe('{{ stripe_publishable_key }}'); // Ensure this is set correctly
+                
+                    $('#checkout-button').on('click', function() {
+                        $.ajax({
+                            url: "{% url 'create_checkout_session' %}",
+                            method: "POST",
+                            data: {
+                                csrfmiddlewaretoken: "{{ csrf_token }}"
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    stripe.redirectToCheckout({ sessionId: response.session_id })
+                                        .then(function (result) {
+                                            if (result.error) {
+                                                alert(result.error.message);
+                                            }
+                                        });
+                                } else {
+                                    alert("Error creating checkout session: " + response.error);
                                 }
-                            });
-                    } else {
-                        alert("Error creating checkout session: " + response.error);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    alert("An unexpected error occurred. Please try again later.");
-                }
-            });
-        });
-
-        function loadCheckoutItems() {
-            $.ajax({
-                url: "{% url 'get_cart' %}",  // Ensure this URL is correct
-                method: "GET",
-                success: function(response) {
-                    const checkoutItems = $('#checkoutItems');
-                    checkoutItems.empty();
-                    let total = 0;
-
-                    response.cart_items.forEach(item => {
-                        const itemTotal = item.price * item.quantity;
-                        total += itemTotal;
-
-                        checkoutItems.append(`
-                            <div class="checkout-item">
-                                <div class="checkout-item-name">${item.name} (x${item.quantity})</div>
-                                <div class="checkout-item-price">$${itemTotal.toFixed(2)}</div>
-                            </div>
-                        `);
+                            },
+                            error: function(xhr, status, error) {
+                                alert("An unexpected error occurred. Please try again later.");
+                            }
+                        });
                     });
-
-                    $('#totalAmount').text(total.toFixed(2));
-                },
-                error: function(xhr, status, error) {
-                    console.error("Error fetching cart data:", status, error);
-                }
-            });
-        }
-
-        $(document).ready(function() {
-            loadCheckoutItems();
-        });
-    </script>
-</body>
-</html>
+                
+                    function loadCheckoutItems() {
+                        $.ajax({
+                            url: "{% url 'get_cart' %}",  // Ensure this URL is correct
+                            method: "GET",
+                            success: function(response) {
+                                const checkoutItems = $('#checkoutItems');
+                                checkoutItems.empty();
+                                let total = 0;
+                
+                                response.cart_items.forEach(item => {
+                                    const itemTotal = item.price * item.quantity;
+                                    total += itemTotal;
+                
+                                    checkoutItems.append(`
+                                        <div class="checkout-item">
+                                            <div class="checkout-item-name">${item.name} (x${item.quantity})</div>
+                                            <div class="checkout-item-price">₹${itemTotal.toFixed(2)}</div>
+                                        </div>
+                                    `);
+                                });
+                
+                                $('#totalAmount').text(total.toFixed(2));
+                            },
+                            error: function(xhr, status, error) {
+                                console.error("Error fetching cart data:", status, error);
+                            }
+                        });
+                    }
+                
+                    $(document).ready(function() {
+                        loadCheckoutItems();
+                    });
+                </script>
+            </div>
+            </body>
+        </html>

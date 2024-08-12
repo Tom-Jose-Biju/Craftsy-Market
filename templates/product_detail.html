@@ -9,23 +9,22 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/magnific-popup.js/1.1.0/magnific-popup.min.css">
     <style>
         body {
-            background-color: #121212;
-            color: #e0e0e0;
-            font-family: 'Poppins', sans-serif;
+            background-color: #121212; /* Dark background for contrast */
+            color: #e0e0e0; /* Light text */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         .navbar {
             background-color: rgba(18, 18, 18, 0.9);
             backdrop-filter: blur(10px);
         }
         .navbar-brand {
-            font-family: 'Brush Script MT', cursive;
-            font-size: 2.5rem;
-            color: #ff6b6b !important;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 1.5rem;
+            color: #f0f0f0 !important;
             transition: all 0.3s ease;
         }
         .navbar-brand:hover {
-            color: #ff9ff3 !important;
+            color: #831515 !important;
             transform: scale(1.05);
         }
         .navbar-dark .navbar-nav .nav-link {
@@ -33,7 +32,7 @@
             transition: color 0.3s ease;
         }
         .navbar-dark .navbar-nav .nav-link:hover {
-            color: #ff6b6b;
+            color: #801313;
         }
         .product-container {
             margin: 6rem auto 2rem;
@@ -57,7 +56,7 @@
             object-fit: cover;
         }
         .product-title {
-            color: #ff6b6b;
+            color: #dd1616;
             margin-bottom: 20px;
             font-weight: 600;
         }
@@ -85,17 +84,17 @@
             font-weight: 600;
         }
         .btn-add-to-cart {
-            background-color: #ff6b6b;
+            background-color: #cc0d0d;
         }
         .btn-add-to-cart:hover {
-            background-color: #ff9ff3;
+            background-color: #95df20;
             color: #000;
         }
         .btn-add-to-wishlist {
             background-color: #4a4a4a;
         }
         .btn-add-to-wishlist:hover {
-            background-color: #ff9ff3;
+            background-color: #1b98be;
         }
         .quantity-input {
             width: 60px;
@@ -140,7 +139,7 @@
         .related-product-title {
             font-size: 1.1rem;
             margin-bottom: 10px;
-            color: #ff6b6b;
+            color: #e91414;
             font-weight: 600;
         }
         .related-product-price {
@@ -150,8 +149,8 @@
         }
         .btn-view-details {
             background-color: transparent;
-            border: 2px solid #ff6b6b;
-            color: #ff6b6b;
+            border: 2px solid #e71111;
+            color: #e01a1a;
             transition: all 0.3s ease;
         }
         .btn-view-details:hover {
@@ -166,7 +165,7 @@
         }
         .feature-icon {
             font-size: 2rem;
-            color: #ff6b6b;
+            color: #e01010;
             margin-bottom: 10px;
         }
     </style>
@@ -237,7 +236,7 @@
                 </div>
                 <div class="col-md-6">
                     <h1 class="product-title">{{ product.name }}</h1>
-                    <p class="product-price">$<span id="product-price">{{ product.price }}</span></p>
+                    <p class="product-price">₹<span id="product-price">{{ product.price }}</span></p>
                     <p class="product-description">{{ product.description }}</p>
                     <p class="product-artisan"><i class="fas fa-user-circle me-2"></i>Crafted by: {{ product.artisan.user.username }}</p>
                     <div class="d-flex align-items-center mb-3">
@@ -287,7 +286,7 @@
                             </div>
                             <div class="related-product-details">
                                 <h5 class="related-product-title">{{ related_product.name }}</h5>
-                                <p class="related-product-price">${{ related_product.price }}</p>
+                                <p class="related-product-price">₹{{ related_product.price }}</p>
                                 <a href="{% url 'product_detail' related_product.id %}" class="btn btn-view-details btn-sm">View Details</a>
                             </div>
                         </div>
@@ -304,54 +303,54 @@
     <script>
         const basePrice = {{ product.price }};
         let cart = [];
-    
+        let wishlist = []; // Add a wishlist array to track wishlist items
+
         function updatePrice() {
             const quantity = parseInt($('#quantity').val());
             const newPrice = (basePrice * quantity).toFixed(2);
             $('#product-price').text(newPrice);
         }
-    
-        function incrementQuantity() {
-            const quantityInput = $('#quantity');
-            quantityInput.val(parseInt(quantityInput.val()) + 1);
-            updatePrice();
+
+        function checkProductInCart(productId) {
+            return cart.find(item => item.id === productId);
         }
-    
-        function decrementQuantity() {
-            const quantityInput = $('#quantity');
-            if (parseInt(quantityInput.val()) > 1) {
-                quantityInput.val(parseInt(quantityInput.val()) - 1);
-                updatePrice();
-            }
+
+        function checkProductInWishlist(productId) {
+            return wishlist.find(item => item.id === productId);
         }
 
         function addToWishlist() {
             const productId = {{ product.id }};
-    
-            $.ajax({
-                url: "{% url 'add_to_wishlist' %}",
-                method: "POST",
-                data: {
-                    product_id: productId,
-                    csrfmiddlewaretoken: "{{ csrf_token }}"
-                },
-                success: function(response) {
-                    if (response.success) {
-                        alert("Product added to wishlist successfully!");
-                    } else {
-                        alert(response.error || "Error adding product to wishlist. Please try again.");
+            if (!checkProductInWishlist(productId)) { // Check if already in wishlist
+                wishlist.push({ id: productId, name: '{{ product.name }}', price: basePrice });
+                $.ajax({
+                    url: "{% url 'add_to_wishlist' %}",
+                    method: "POST",
+                    data: {
+                        product_id: productId,
+                        csrfmiddlewaretoken: "{{ csrf_token }}"
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert("Product added to wishlist successfully!");
+                        } else {
+                            alert(response.error || "Error adding product to wishlist. Please try again.");
+                        }
+                    },
+                    error: function() {
+                        alert("An unexpected error occurred. Please try again later.");
                     }
-                },
-                error: function() {
-                    alert("An unexpected error occurred. Please try again later.");
-                }
-            });
+                });
+            } else {
+                alert("Product is already in your wishlist.");
+            }
         }
-    
+
         function addToCart() {
-            const quantity = parseInt($('#quantity').val());
             const productId = {{ product.id }};
-        
+            const existingItem = checkProductInCart(productId);
+            const quantity = existingItem ? existingItem.quantity + 1 : 1; // Increase quantity if exists
+
             $.ajax({
                 url: "{% url 'add_to_cart' %}",
                 method: "POST",
@@ -362,8 +361,13 @@
                 },
                 success: function(response) {
                     if (response.success) {
+                        if (existingItem) {
+                            existingItem.quantity = quantity; // Update quantity in cart
+                        } else {
+                            cart.push({ id: productId, name: '{{ product.name }}', price: basePrice, quantity: 1 });
+                        }
                         alert("Product added to cart successfully!");
-                        updateCartDisplay();  // Add this line to update the cart display
+                        updateCartDisplay();
                     } else {
                         if (response.error === "AnonymousUser") {
                             alert("Please log in to add items to your cart.");
