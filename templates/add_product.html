@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
         body {
-            background-color: #000;
+            background-color: #121212;
             color: #fff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
@@ -19,18 +19,9 @@
             font-family: 'Brush Script MT', cursive;
             font-size: 2.5rem;
             color: #ff6b6b !important;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            transition: all 0.3s ease;
-        }
-        .navbar-brand:hover {
-            color: #ff9ff3 !important;
-            transform: scale(1.05);
-        }
-        .navbar-dark .navbar-nav .nav-link {
-            color: #fff;
         }
         .form-container {
-            background-color: rgba(26, 26, 26, 0.8);
+            background-color: rgba(26, 26, 26, 0.9);
             border-radius: 15px;
             padding: 40px;
             box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
@@ -38,18 +29,17 @@
         }
         .form-container h2 {
             font-family: 'Brush Script MT', cursive;
-            font-size: 3rem;
+            font-size: 2.5rem;
             color: #ff6b6b;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            margin-bottom: 30px;
             text-align: center;
+            margin-bottom: 30px;
         }
         .form-control {
             background-color: rgba(255, 255, 255, 0.1);
             border: none;
             border-radius: 25px;
             color: #fff;
-            padding: 15px 20px;
+            padding: 15px;
             margin-bottom: 20px;
         }
         .form-control:focus {
@@ -59,6 +49,16 @@
         }
         .form-control::placeholder {
             color: rgba(255, 255, 255, 0.7);
+        }
+        /* New styles for the category dropdown */
+        #category {
+            color: black; /* Change text color to black */
+        }
+        #category option {
+            color: black; /* Change option text color to black */
+        }
+        #category:focus {
+            color: black; /* Ensure text color remains black when focused */
         }
         .btn-primary {
             background-color: #ff6b6b;
@@ -71,8 +71,6 @@
         }
         .btn-primary:hover {
             background-color: #ff9ff3;
-            transform: translateY(-3px);
-            box-shadow: 0 10px 20px rgba(255, 107, 107, 0.3);
         }
     </style>
 </head>
@@ -109,23 +107,35 @@
                     <h2>Add New Product</h2>
                     <form method="POST" enctype="multipart/form-data">
                         {% csrf_token %}
-                        {% for field in form %}
-                            <div class="mb-3">
-                                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                                {% if field.name == 'images' %}
-                                    <input type="file" name="{{ field.name }}" id="{{ field.id_for_label }}" class="form-control" multiple>
-                                {% else %}
-                                    {{ field }}
-                                {% endif %}
-                                {% if field.errors %}
-                                    <div class="text-danger mt-1">
-                                        {% for error in field.errors %}
-                                            {{ error }}
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                        {% endfor %}
+                        <div class="mb-3">
+                            <label for="product_name" class="form-label">Product Name</label>
+                            <input type="text" name="name" id="product_name" class="form-control" placeholder="Enter product name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="product_description" class="form-label">Description</label>
+                            <textarea name="description" id="product_description" class="form-control" rows="4" placeholder="Enter product description" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="product_price" class="form-label">Price</label>
+                            <input type="number" name="price" id="product_price" class="form-control" placeholder="Enter product price" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="product_inventory" class="form-label">Inventory</label>
+                            <input type="number" name="inventory" id="product_inventory" class="form-control" placeholder="Enter inventory count" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="product_images" class="form-label">Images</label>
+                            <input type="file" name="images" id="product_images" class="form-control" multiple required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="category" class="form-label">Category</label>
+                            <select name="category" id="category" class="form-control" required>
+                                <option value="">Select a category</option>
+                                {% for category in categories %}
+                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary">Add Product</button>
                         </div>

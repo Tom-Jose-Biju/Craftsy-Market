@@ -21,6 +21,7 @@ from django.db.models.signals import post_save
 from django.shortcuts import get_object_or_404
 from .models import Category
 from django.db.models import Q
+from django.views.decorators.http import require_http_methods
 
 
 
@@ -136,6 +137,34 @@ def admin_add_category(request):
     categories = Category.objects.all()
     return render(request, 'admin_add_category.html', {'categories': categories})
 
+@login_required
+@require_POST
+def enable_category(request, category_id):
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
+    category = get_object_or_404(Category, id=category_id)
+    category.is_active = True  # Set the category to active
+    category.save()
+    
+    messages.success(request, f"Category '{category.name}' has been enabled successfully.")
+    return redirect('admin_add_category')
+
+@login_required
+@require_POST
+def disable_category(request, category_id):
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
+    category = get_object_or_404(Category, id=category_id)
+    category.is_active = False  # Set the category to inactive
+    category.save()
+    
+    messages.success(request, f"Category '{category.name}' has been disabled successfully.")
+    return redirect('admin_add_category')
+
 # Artisan Views
 def artisan_register(request):
     if request.method == 'POST':
@@ -191,6 +220,8 @@ def add_product(request):
         messages.error(request, "Only artisans can add products.")
         return redirect('home')
     
+    categories = Category.objects.filter(is_active=True)  # Only active categories
+
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES)
         if form.is_valid():
@@ -211,11 +242,11 @@ def add_product(request):
             return redirect('artisan_products')
     else:
         form = ProductForm()
-    return render(request, 'add_product.html', {'form': form})
+    return render(request, 'add_product.html', {'form': form, 'categories': categories})
 
 def products(request):
     products = Product.objects.all()
-    categories = Category.objects.all()
+    categories = Category.objects.filter(is_active=True)  # Only active categories
 
     search_query = request.GET.get('search')
     if search_query:
@@ -327,41 +358,48 @@ def deactivate_account(request):
     return JsonResponse({'success': True})
 
 # Checkout and Payment Views
+@require_http_methods(["POST", "GET"])  # Allow both POST and GET
 @login_required
-@require_POST
 def checkout(request):
-    try:
-        cart_data = json.loads(request.body)
-        line_items = []
+    if request.method == 'POST':
+        try:
+            cart_data = json.loads(request.body)
+            line_items = []
 
-        for item in cart_data:
-            product = Product.objects.get(id=item['id'])
-            line_items.append({
-                'price_data': {
-                    'currency': 'usd',
-                    'unit_amount': int(product.price * 100),
-                    'product_data': {
-                        'name': product.name,
-                        'description': product.description[:100],
+            for item in cart_data:
+                product = Product.objects.get(id=item['id'])
+                line_items.append({
+                    'price_data': {
+                        'currency': 'usd',
+                        'unit_amount': int(product.price * 100),
+                        'product_data': {
+                            'name': product.name,
+                            'description': product.description[:100],
+                        },
                     },
-                },
-                'quantity': item['quantity'],
-            })
+                    'quantity': item['quantity'],
+                })
 
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=line_items,
-            mode='payment',
-            success_url=request.build_absolute_uri(reverse('payment_success')),
-            cancel_url=request.build_absolute_uri(reverse('payment_cancel')),
-        )
-        return JsonResponse({'success': True, 'checkout_url': checkout_session.url})
-    except Product.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'One or more products in your cart are no longer available.'}, status=400)
-    except stripe.error.StripeError as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': 'An unexpected error occurred. Please try again.'}, status=500)
+            checkout_session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                line_items=line_items,
+                mode='payment',
+                success_url=request.build_absolute_uri(reverse('payment_success')),
+                cancel_url=request.build_absolute_uri(reverse('payment_cancel')),
+            )
+            return JsonResponse({'success': True, 'checkout_url': checkout_session.url})
+        except Product.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'One or more products in your cart are no longer available.'}, status=400)
+        except stripe.error.StripeError as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': 'An unexpected error occurred. Please try again.'}, status=500)
+    else:
+        # Handle GET request, e.g., render a checkout page
+        context = {
+            'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY  # Ensure this is set
+        }
+        return render(request, 'checkout.html', context)
 
 @require_GET
 def payment_success(request):

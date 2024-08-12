@@ -107,13 +107,21 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'products' %}"><i class="fas fa-shopping-bag me-2"></i>Products</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'order_history' %}"><i class="fas fa-history me-2"></i>Order History</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'profile' %}"><i class="fas fa-user me-2"></i>Profile</a>
-                    </li>
-                </ul>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'profile' %}"><i class="fas fa-user me-2"></i>Profile</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'logout' %}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'wishlist' %}"><i class="fas fa-heart me-2"></i>Wishlist</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'cart' %}"><i class="fas fa-shopping-cart me-2"></i>Cart</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'order_history' %}"><i class="fas fa-history me-2"></i>Order History</a>
+                        </li>
             </div>
         </div>
     </nav>

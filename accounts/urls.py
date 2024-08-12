@@ -28,18 +28,26 @@ urlpatterns = [
     path('admin-dashboard/users/', views.admin_users, name='admin_users'),
     path('admin-dashboard/artisans/', views.admin_artisans, name='admin_artisans'),
     path('admin-dashboard/add-category/', views.admin_add_category, name='admin_add_category'),
+    path('admin-dashboard/disable-category/<int:category_id>/', views.disable_category, name='admin_disable_category'),
+    path('admin-dashboard/enable-category/<int:category_id>/', views.enable_category, name='admin_enable_category'),
 
     
     path('deactivate-account/', views.deactivate_account, name='deactivate_account'),
+
     path('checkout/', views.checkout, name='checkout'),
+    path('create_checkout_session/', views.create_checkout_session, name='create_checkout_session'),  # Create checkout session
     path('payment/success/', views.payment_success, name='payment_success'),
     path('payment/cancel/', views.payment_cancel, name='payment_cancel'),
+    
     path('password_reset/', auth_views.PasswordResetView.as_view(template_name='password_reset.html'), name='password_reset'),
     path('password_reset/done/', auth_views.PasswordResetDoneView.as_view(template_name='password_reset_done.html'), name='password_reset_done'),
     path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='password_reset_confirm.html'), name='password_reset_confirm'),
     path('reset/done/', auth_views.PasswordResetCompleteView.as_view(template_name='password_reset_complete.html'), name='password_reset_complete'),
 
     path('cart/', views.cart, name='cart'),
+    path('get_cart/', views.get_cart, name='get_cart'),
+    path('remove-from-cart/', views.remove_from_cart, name='remove_from_cart'),
+    path('update-cart-quantity/', views.update_cart_quantity, name='update_cart_quantity'),
     path('wishlist/', views.wishlist, name='wishlist'),
     path('add-to-cart/', views.add_to_cart, name='add_to_cart'),
     path('remove-from-cart/', views.remove_from_cart, name='remove_from_cart'),
