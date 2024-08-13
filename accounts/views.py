@@ -339,14 +339,12 @@ def product_detail(request, product_id):
 # Profile Views
 @login_required
 def profile(request):
-    profile, created = Profile.objects.get_or_create(user=request.user)
-
+    profile = Profile.objects.get(user=request.user)
     if request.method == 'POST':
         form = ProfileForm(request.POST, request.FILES, instance=profile)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Profile updated successfully')
-            return redirect('profile')
+            return redirect('profile')  # Redirect to the profile page after saving
     else:
         form = ProfileForm(instance=profile)
 

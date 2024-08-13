@@ -24,10 +24,11 @@ class MultipleFileField(forms.FileField):
 
 class ProfileForm(forms.ModelForm):
     phone_regex = RegexValidator(
-        regex=r'^\+?1?\d{9,15}$',
-        message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed."
+        regex=r'^\+?1?\d{9,10}$',
+        message="Phone number must be entered in the format: '+999999999'. Up to 10 digits allowed."
     )
-    phone_number = forms.CharField(validators=[phone_regex], max_length=17)
+    phone_number = forms.CharField(validators=[phone_regex], max_length=15, required=False)
+    profile_image = forms.ImageField(required=False)
 
     class Meta:
         model = Profile
@@ -42,17 +43,6 @@ class ProfileForm(forms.ModelForm):
             'phone_number': forms.TextInput(attrs={'placeholder': 'Phone Number', 'class': 'form-control'}),
         }
 
-def clean_postal_code(self):
-    postal_code = self.cleaned_data.get('postal_code')
-    if postal_code is None:
-        raise forms.ValidationError("Postal code is required.")
-    if not postal_code.isdigit():
-        raise forms.ValidationError("Postal code should contain only digits.")
-    return postal_code
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['profile_image'].required = False
 
 class ArtisanProfileForm(forms.ModelForm):
     class Meta:

@@ -121,7 +121,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
         <div class="container">
-            <a class="navbar-brand" href="{% url 'home' %}"><i class="fas fa-paint-brush me-2"></i>Craftsy</a>
+            <a class="navbar-brand" href="{% url 'home' %}"></i>Craftsy</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -153,7 +153,9 @@
     </nav>
 
     <div class="container profile-container">
-        <div class="row">
+        <form method="post" action="{% url 'profile' %}" enctype="multipart/form-data" class="mb-4">
+            {% csrf_token %}
+            <div class="row">
             <div class="col-md-4">
                 <div class="profile-header">
                     <h2><i class="fas fa-user-circle me-2"></i>{{ user.username }}</h2>
@@ -165,14 +167,11 @@
                         <img src="https://via.placeholder.com/150" alt="Profile Image" class="img-fluid">
                     {% endif %}
                 </div>
-                <form method="post" action="{% url 'profile' %}" enctype="multipart/form-data" class="mb-4">
-                    {% csrf_token %}
                     <div class="form-group">
                         <label for="profile_image" class="form-label"><i class="fas fa-camera me-2"></i>Change Profile Image</label>
                         <input type="file" id="profile_image" name="profile_image" class="form-control">
                     </div>
                     <button type="submit" class="btn btn-primary w-100"><i class="fas fa-upload me-2"></i>Update Image</button>
-                </form>
                 <div class="profile-details">
                     <p><i class="fas fa-envelope me-2"></i><strong>Email:</strong> {{ user.email }}</p>
                     <button type="button" class="btn btn-danger mt-3 w-100" onclick="confirmDeactivation()"><i class="fas fa-user-times me-2"></i>Deactivate Account</button>
@@ -180,8 +179,6 @@
             </div>
             <div class="col-md-8">
                 <h3 class="mb-4"><i class="fas fa-map-marker-alt me-2"></i>Update Address Information</h3>
-                <form method="post" action="{% url 'profile' %}">
-                    {% csrf_token %}
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
@@ -221,9 +218,9 @@
                         <input type="text" id="phone_number" name="phone_number" class="form-control" placeholder="+91" value="{{ profile.phone_number }}">
                     </div>
                     <button type="submit" class="btn btn-primary"><i class="fas fa-save me-2"></i>Save Address</button>
-                </form>
+                </div>
             </div>
-        </div>
+            </form>
         <div class="links text-center mt-4">
             <a href="{% url 'home' %}"><i class="fas fa-arrow-left me-2"></i>Back To Home</a>
         </div>
