@@ -6,29 +6,16 @@
     <title>Artisan Page - Craftsy Market</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css" rel="stylesheet">
     <style>
         body {
-            background-color: #000;
-            color: #fff;
+            background-color: #121212;
+            color: #e0e0e0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         .navbar {
-            background-color: rgba(0, 0, 0, 0.8);
-        }
-        .navbar-brand {
-            font-family: 'Brush Script MT', cursive;
-            font-size: 2.5rem;
-            color: #ff6b6b !important;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            transition: all 0.3s ease;
-        }
-        .navbar-brand:hover {
-            color: #ff9ff3 !important;
-            transform: scale(1.05);
-        }
-        .navbar-dark .navbar-nav .nav-link,
-        .navbar-light .navbar-nav .nav-link {
-            color: #fff !important;
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
         }
         .hero-section {
             background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80') no-repeat center center;
@@ -44,40 +31,110 @@
             color: #fff;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
+        .fade-in {
+            animation: fadeIn 1s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
         .info-section {
             background-color: rgba(34, 34, 34, 0.8);
             border-radius: 10px;
-            box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
-            padding: 30px;
+            padding: 20px;
             margin-bottom: 30px;
+            transition: transform 0.3s;
         }
-        .info-section h3 {
+        .info-section:hover {
+            transform: scale(1.05);
+        }
+        .btn-success {
+            background-color: #4caf50;
+            border: none;
+            transition: background-color 0.3s;
+        }
+        .btn-success:hover {
+            background-color: #45a049;
+        }
+        h3 {
             color: #ff6b6b;
             margin-bottom: 20px;
         }
-        .btn-primary {
-            background-color: #ff6b6b;
-            border-color: #ff6b6b;
-        }
-        .btn-primary:hover {
-            background-color: #ff9ff3;
-            border-color: #ff9ff3;
-        }
-        .feature-icon {
-            font-size: 3rem;
-            color: #ff6b6b;
-            margin-bottom: 15px;
-        }
-        .static-icon {
-            font-size: 2rem;
-            color: #ff9ff3;
+        p {
+            color: white;
         }
         .static-info {
+            background-color: rgba(26, 26, 26, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        /* New Static Elements */
+        .testimonial-section {
+            background-color: rgba(26, 26, 26, 0.9);
+            padding: 40px;
+            border-radius: 10px;
+            margin-top: 50px;
+        }
+        .testimonial {
+            color: #fff;
+            font-style: italic;
+            margin-bottom: 30px;
+            text-align: center;
+            animation: fadeInUp 1s ease-in-out;
+        }
+        @keyframes fadeInUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .testimonial .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin-bottom: 10px;
+        }
+        .testimonial p {
+            margin-bottom: 10px;
+            color: #e0e0e0;
+        }
+        .testimonial .name {
+            font-weight: bold;
+            color: #ff6b6b;
+        }
+        /* Animation for Buttons */
+        .btn-animation {
+            animation: bounceIn 1s ease;
+        }
+        @keyframes bounceIn {
+            0%, 20%, 40%, 60%, 80%, 100% {
+                transition-timing-function: cubic-bezier(0.215, 0.610, 0.355, 1.000);
+            }
+            0% {
+                opacity: 0;
+                transform: scale3d(.3, .3, .3);
+            }
+            20% {
+                transform: scale3d(1.1, 1.1, 1.1);
+            }
+            40% {
+                transform: scale3d(.9, .9, .9);
+            }
+            60% {
+                opacity: 1;
+                transform: scale3d(1.03, 1.03, 1.03);
+            }
+            80% {
+                transform: scale3d(.97, .97, .97);
+            }
+            100% {
+                opacity: 1;
+                transform: scale3d(1, 1, 1);
+            }
+        }
+        .faq-section {
             background-color: rgba(34, 34, 34, 0.8);
             border-radius: 10px;
             padding: 20px;
-            margin: 20px 0;
-            text-align: center;
+            margin-top: 50px;
         }
     </style>
 </head>
@@ -128,88 +185,124 @@
 
     <div class="container mt-5">
         {% if user.is_authenticated %}
-            {% with user.username as username %}
-                <script>
-                    sessionStorage.setItem('username', '{{ username }}');
-                </script>
-            {% endwith %}
-            <div class="info-section">
-                <h2>Welcome back, {{ user.username }}!</h2>
-                <p>Continue crafting and selling your unique products on Craftsy Market.</p>
-                <a href="{% url 'add_product' %}" class="btn btn-primary">Add New Product</a>
+            <div class="alert alert-success fade-in" role="alert">
+                Welcome back, {{ user.username }}! Continue crafting and selling your unique products on Craftsy Market.
             </div>
+            <a href="{% url 'add_product' %}" class="btn btn-primary btn-animation">Add New Product</a>
         {% else %}
-            <div class="info-section">
-                <h2>Join Our Artisan Community</h2>
-                <p>Become a part of Craftsy Market and start selling your handmade products today.</p>
-                <a href="{% url 'artisan_register' %}" class="btn btn-primary">Register as an Artisan</a>
+            <div class="alert alert-info fade-in" role="alert">
+                Join Our Artisan Community and start selling your handmade products today!
             </div>
+            <a href="{% url 'artisan_register' %}" class="btn btn-primary btn-animation">Register as an Artisan</a>
         {% endif %}
 
         <div class="row mt-5">
             <div class="col-md-4">
-                <div class="info-section text-center">
-                    <div class="feature-icon">🛠️</div>
-                    <h3>Showcase Your Craft</h3>
-                    <p>Display your unique handmade products to a wide audience of craft enthusiasts.</p>
+                <div class="card info-section text-center">
+                    <div class="card-body">
+                        <div class="feature-icon">🛠️</div>
+                        <h3>Showcase Your Craft</h3>
+                        <p>Display your unique handmade products to a wide audience of craft enthusiasts.</p>
+                    </div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="info-section text-center">
-                    <div class="feature-icon">💰</div>
-                    <h3>Earn from Your Passion</h3>
-                    <p>Turn your hobby into a profitable venture. Set your own prices and keep most of the earnings.</p>
+                <div class="card info-section text-center">
+                    <div class="card-body">
+                        <div class="feature-icon">💰</div>
+                        <h3>Earn from Your Talent</h3>
+                        <p>Monetize your craftsmanship by selling products directly through Craftsy Market.</p>
+                    </div>
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="info-section text-center">
-                    <div class="feature-icon">🌐</div>
-                    <h3>Reach Global Customers</h3>
-                    <p>Connect with customers from around the world who appreciate handmade crafts.</p>
+                <div class="card info-section text-center">
+                    <div class="card-body">
+                        <div class="feature-icon">🌍</div>
+                        <h3>Join a Global Community</h3>
+                        <p>Connect with artisans and craft lovers from around the world.</p>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="static-info">
-            <h3><i class="static-icon fas fa-info-circle"></i> Artisan Benefits</h3>
-            <p>As an artisan, you gain access to a platform that promotes your work, connects you with buyers, and provides tools to manage your sales effectively.</p>
-        </div>
-
-        <div class="info-section mt-5">
-            <h3>How It Works</h3>
-            <ol>
-                <li>Register as an artisan on Craftsy Market.</li>
-                <li>Set up your profile and showcase your skills.</li>
-                <li>Add your handmade products with detailed descriptions and high-quality photos.</li>
-                <li>Set your prices and manage your inventory.</li>
-                <li>Receive orders and fulfill them.</li>
-                <li>Get paid for your crafts and grow your business!</li>
-            </ol>
-        </div>
-
-        <div class="info-section mt-5">
-            <h3>Artisan Success Stories</h3>
-            <div class="row">
-                <div class="col-md-6">
-                    <img src="https://images.unsplash.com/photo-1556760544-74068565f05c?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80" alt="Artisan Success Story" class="img-fluid rounded mb-3">
-                    <h4>Sarah's Pottery Paradise</h4>
-                    <p>"Joining Craftsy Market has allowed me to share my pottery with people all over the world. It's been an amazing journey!"</p>
-                </div>
-                <div class="col-md-6">
-                    <img src="https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1374&q=80" alt="Artisan Success Story" class="img-fluid rounded mb-3">
-                    <h4>John's Woodworking Wonders</h4>
-                    <p>"I've been able to turn my passion for woodworking into a full-time business thanks to the exposure I've gained on Craftsy Market."</p>
+        <div class="row mt-5">
+            <div class="col-12">
+                <h3 class="text-center">Featured Products</h3>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card info-section text-center">
+                            <img src="https://wallpapercave.com/wp/wp2375373.jpg" class="card-img-top" alt="Product 1">
+                            <div class="card-body">
+                                <h5 class="card-title">Handmade Necklace</h5>
+                                <p class="card-text">Beautifully crafted necklace made from natural stones.</p>
+                                <a href="#" class="btn btn-success">View Product</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card info-section text-center">
+                            <img src="https://wallpapercave.com/wp/wp9661340.jpg" class="card-img-top" alt="Product 2">
+                            <div class="card-body">
+                                <h5 class="card-title">Artisan Mug</h5>
+                                <p class="card-text">Unique mug handcrafted by local artisans.</p>
+                                <a href="#" class="btn btn-success">View Product</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card info-section text-center">
+                            <img src="https://wallpapercave.com/wp/wp5986317.jpg" class="card-img-top" alt="Product 3">
+                            <div class="card-body">
+                                <h5 class="card-title">Woven Basket</h5>
+                                <p class="card-text">Stunning woven basket perfect for home decor.</p>
+                                <a href="#" class="btn btn-success">View Product</a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- FAQ Section -->
+        <div class="faq-section mt-5">
+            <h3>Frequently Asked Questions</h3>
+            <ul>
+                <li><strong>How do I register as an artisan?</strong> Simply click on the register button and fill out the form.</li>
+                <li><strong>What types of products can I sell?</strong> You can sell any handmade or crafted products.</li>
+                <li><strong>How do I get paid?</strong> Payments are processed through our secure payment system.</li>
+                <li><strong>Can I edit my product listings?</strong> Yes, you can edit your listings at any time from your profile.</li>
+            </ul>
+        </div>
+
+        <!-- New Static Elements -->
+        <div class="row mt-5">
+            <div class="col-md-6">
+                <div class="testimonial-section">
+                    <div class="testimonial">
+                        <img src="https://e7.pngegg.com/pngimages/799/987/png-clipart-computer-icons-avatar-icon-design-avatar-heroes-computer-wallpaper-thumbnail.png" alt="avatar" class="avatar">
+                        <p>"Craftsy has been a game-changer for my small business. The community is supportive, and my products have reached a global audience!"</p>
+                        <div class="name">- Artisan A</div>
+                    </div>
+                    <div class="testimonial">
+                        <img src="https://w7.pngwing.com/pngs/129/292/png-transparent-female-avatar-girl-face-woman-user-flat-classy-users-icon.png" alt="avatar" class="avatar">
+                        <p>"The platform is easy to use, and the team is always there to help. I've seen a significant increase in sales since joining."</p>
+                        <div class="name">- Artisan B</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="static-info">
+                    <h3>How to Get Started</h3>
+                    <p>1. Register as an Artisan</p>
+                    <p>2. Set up your profile and shop</p>
+                    <p>3. Start uploading your handmade products</p>
+                    <p>4. Promote your shop and watch your business grow!</p>
+                </div>
+            </div>
+        </div>
+
     </div>
-
-    <footer class="bg-light text-center text-lg-start mt-5">
-        <div class="text-center p-3" style="background-color: rgba(140, 109, 98, 0.2);">
-            © 2023 Craftsy Market:
-            <a class="text-dark" href="{% url 'home' %}">craftsy.com</a>
-        </div>
-    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

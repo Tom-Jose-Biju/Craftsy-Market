@@ -53,13 +53,22 @@ def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
-        user = authenticate(request, username=username, password=password)
         
+        # Allow superuser with username 'admin' and password 'admin' to bypass validation
+        if username == 'admin' and password == 'admin':
+            user = get_object_or_404(User, username=username)
+            backend = 'django.contrib.auth.backends.ModelBackend'  # Specify the backend
+        else:
+            # Authenticate using the default backend
+            user = authenticate(request, username=username, password=password)
+            backend = 'django.contrib.auth.backends.ModelBackend'  # Use the ModelBackend
+
         # Debugging output
-        print(f"Username: {username}, Password: {password}, User: {user}")  # Check the authentication result
+        print(f"Username: {username}, Password: {password}, User: {user}, Backend: {backend}")  # Check the authentication result
         
         if user is not None:
-            login(request, user)
+            user.backend = backend  # Set the backend on the user
+            login(request, user, backend=backend)  # Provide the backend here
             request.session['user_id'] = user.id
             request.session['username'] = user.username
             
@@ -74,6 +83,7 @@ def login_view(request):
             messages.error(request, 'Invalid username or password')  # Error message for failed login
 
     return render(request, 'login.html')
+
 
 @login_required
 def signout(request):
@@ -207,6 +217,7 @@ def artisan_profile(request):
             if form.is_valid():
                 form.save()
                 messages.success(request, 'Profile updated successfully.')
+                return redirect('artisan_profile')  # Redirect to avoid resubmission
             else:
                 messages.error(request, 'Error updating profile. Please check the form.')
     
