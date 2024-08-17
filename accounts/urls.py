@@ -29,6 +29,8 @@ urlpatterns = [
     path('admin-dashboard/add-category/', views.admin_add_category, name='admin_add_category'),
     path('admin-dashboard/disable-category/<int:category_id>/', views.disable_category, name='admin_disable_category'),
     path('admin-dashboard/enable-category/<int:category_id>/', views.enable_category, name='admin_enable_category'),
+    path('admin-dashboard/edit-category/<int:category_id>/', views.admin_edit_category, name='admin_edit_category'),
+    path('admin-dashboard/delete-category/<int:category_id>/', views.admin_delete_category, name='admin_delete_category'),
 
     
     path('deactivate-account/', views.deactivate_account, name='deactivate_account'),

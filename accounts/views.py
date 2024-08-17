@@ -181,6 +181,30 @@ def disable_category(request, category_id):
     messages.success(request, f"Category '{category.name}' has been disabled successfully.")
     return redirect('admin_add_category')
 
+@login_required
+def admin_edit_category(request, category_id):
+    category = get_object_or_404(Category, id=category_id)
+    
+    if request.method == 'POST':
+        category_name = request.POST.get('category_name')
+        if category_name:
+            category.name = category_name
+            category.save()
+            messages.success(request, f"Category '{category.name}' has been updated successfully.")
+            return redirect('admin_add_category')
+        else:
+            messages.error(request, "Category name cannot be empty.")
+    
+    return render(request, 'edit_category.html', {'category': category})
+
+@login_required
+@require_POST
+def admin_delete_category(request, category_id):
+    category = get_object_or_404(Category, id=category_id)
+    category.delete()
+    messages.success(request, f"Category '{category.name}' has been deleted successfully.")
+    return redirect('admin_add_category')
+
 # Artisan Views
 def artisan_register(request):
     if request.method == 'POST':
