@@ -168,6 +168,30 @@
             color: #e01010;
             margin-bottom: 10px;
         }
+        .reviews-section {
+            background-color: rgba(34, 34, 34, 0.8);
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 30px;
+        }
+        .review {
+            background-color: rgba(26, 26, 26, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .review-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .review-rating {
+            color: #f1c40f;
+        }
+        .review-comment {
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -269,6 +293,44 @@
                     </div>
                 </div>
             </div>
+        </div>
+        <div class="reviews-section">
+            <h3><i class="fas fa-comments me-2"></i>Customer Reviews</h3>
+            {% if average_rating %}
+                <p>Average Rating: <span class="review-rating">
+                    {% for i in "12345" %}
+                        {% if forloop.counter <= average_rating|add:0 %}
+                            <i class="fas fa-star"></i>
+                        {% else %}
+                            <i class="far fa-star"></i>
+                        {% endif %}
+                    {% endfor %}
+                    {{ average_rating|floatformat:1 }}
+                </span></p>
+            {% else %}
+                <p>No ratings yet</p>
+            {% endif %}
+            
+            {% for review in reviews %}
+                <div class="review">
+                    <div class="review-header">
+                        <p><i class="fas fa-user me-2"></i>{{ review.user.username }}</p>
+                        <p><i class="far fa-calendar-alt me-2"></i>{{ review.created_at|date:"F d, Y" }}</p>
+                    </div>
+                    <p class="review-rating">
+                        {% for i in "12345" %}
+                            {% if forloop.counter <= review.rating %}
+                                <i class="fas fa-star"></i>
+                            {% else %}
+                                <i class="far fa-star"></i>
+                            {% endif %}
+                        {% endfor %}
+                    </p>
+                    <p class="review-comment">{{ review.comment }}</p>
+                </div>
+            {% empty %}
+                <p>No reviews yet.</p>
+            {% endfor %}
         </div>
 
         <div class="related-products">

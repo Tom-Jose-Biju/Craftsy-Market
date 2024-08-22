@@ -1,223 +1,116 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add New Product - Craftsy</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css" rel="stylesheet">
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
         body {
             background-color: #121212;
-            color: #fff;
+            color: #e0e0e0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
         }
-
-        .form-container {
-            background-color: rgba(26, 26, 26, 0.9);
-            border-radius: 25px;
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        .info-section {
+            background-color: rgba(34, 34, 34, 0.8);
+            border-radius: 10px;
             padding: 20px;
-            box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: space-between;
-            width: 80%;
-            max-width: 1200px;
-            transition: all 0.5s ease;
-            animation: fadeIn 1s forwards, glowing 1.5s infinite alternate;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-
-            to {
-                opacity: 1;
-            }
-        }
-
-        @keyframes glowing {
-            from {
-                box-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
-            }
-
-            to {
-                box-shadow: 0 0 60px rgba(255, 107, 107, 1);
-            }
-        }
-
-        .image-container {
-            flex: 1;
-            position: relative;
-            margin-right: 20px;
-            overflow: hidden;
-            border-radius: 25px;
-        }
-
-        .image-container img {
-            width: 100%;
-            height: 95%;
-            object-fit: cover;
-            border-radius: 25px;
-            animation: fade 5s infinite alternate;
-        }
-
-        @keyframes fade {
-            from {
-                opacity: 1;
-            }
-
-            to {
-                opacity: 0.7;
-            }
-        }
-
-        .form-content {
-            flex: 2;
-            padding-left: 20px;
-        }
-
-        .form-content h2 {
-            font-family: 'Brush Script MT', cursive;
-            font-size: 2.5rem;
-            color: #ff6b6b;
-            text-align: left;
             margin-bottom: 30px;
+            transition: transform 0.3s;
         }
-
-        .form-control {
-            background-color: rgba(255, 255, 255, 0.1);
-            border: none;
-            border-radius: 25px;
-            color: #fff;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-
-        .form-control:focus {
-            background-color: rgba(255, 255, 255, 0.2);
-            box-shadow: none;
-            color: #fff;
-        }
-
-        .form-control::placeholder {
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        #category {
-            color: black;
-        }
-
-        #category option {
-            color: black;
-        }
-
-        #category:focus {
-            color: black;
-        }
-
-        .btn-primary {
-            background-color: #ff6b6b;
-            border: none;
-            border-radius: 25px;
-            color: #fff;
-            font-weight: bold;
-            padding: 12px 30px;
-            transition: all 0.3s ease;
-            width: 100%;
-        }
-
-        .btn-primary:hover {
-            background-color: #ff9ff3;
+        .info-section:hover {
+            transform: scale(1.05);
         }
     </style>
 </head>
 
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'artisan_home' %}">Craftsy</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'artisan_home' %}"><i class="fas fa-home me-2"></i>Home</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'products' %}"><i class="fas fa-box me-2"></i>Products</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'artisan_products' %}"><i class="fas fa-box-open me-2"></i>My Products</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'logout' %}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
-                    </li>
+<body class="min-h-screen">
+    <nav class="navbar shadow-lg fixed top-0 z-50 w-full">
+        <div class="container mx-auto">
+            <div class="flex-1">
+                <a href="{% url 'artisan_home' %}" class="btn btn-ghost normal-case text-xl">Craftsy</a>
+            </div>
+            <div class="flex-none">
+                <ul class="menu menu-horizontal px-1">
+                    <li><a href="{% url 'artisan_home' %}"><i class="fas fa-home mr-2"></i>Home</a></li>
+                    <li><a href="{% url 'products' %}"><i class="fas fa-box mr-2"></i>Products</a></li>
+                    <li><a href="{% url 'artisan_products' %}"><i class="fas fa-box-open mr-2"></i>My Products</a></li>
+                    <li><a href="{% url 'logout' %}"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a></li>
                 </ul>
             </div>
         </div>
     </nav>
-    <div class="form-container">
-        <div class="image-container">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/1/10/Bundesarchiv_Bild_183-S33882%2C_Adolf_Hitler_retouched.jpg" alt="Product Image">
-            <div class="caption" style="text-align: center; color: #fff; margin-top: 10px;">The Australian Painter</div>
-        </div>
-        <div class="form-content">
-            <h2>Add New Product</h2>
-            <form method="POST" enctype="multipart/form-data">
-                {% csrf_token %}
-                <div class="form-group">
-                    <label for="product_name" class="form-label">Product Name</label>
-                    <input type="text" name="name" id="product_name" class="form-control" placeholder="Enter product name" required>
-                </div>
-                <div class="form-group">
-                    <label for="product_description" class="form-label">Description</label>
-                    <textarea name="description" id="product_description" class="form-control" rows="4" placeholder="Enter product description" required></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="product_price" class="form-label">Price</label>
-                    <input type="number" name="price" id="product_price" class="form-control" placeholder="Enter product price" required>
-                </div>
-                <div class="form-group">
-                    <label for="product_inventory" class="form-label">Inventory</label>
-                    <input type="number" name="inventory" id="product_inventory" class="form-control" placeholder="Enter inventory count" required>
-                </div>
-                <div class="form-group">
-                    <label for="product_images" class="form-label">Images</label>
-                    <input type="file" name="images" id="product_images" class="form-control" multiple required>
-                </div>
-                <div class="form-group">
-                    <label for="category" class="form-label">Category</label>
-                    <select name="category" id="category" class="form-control" required>
-                        <option value="">Select a category</option>
-                        {% for category in categories %}
-                        <option value="{{ category.id }}">{{ category.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="d-grid">
-                    <button type="submit" class="btn btn-primary">Add Product</button>
-                </div>
-            </form>
+
+    <div class="container mx-auto px-4 py-8 mt-16">
+        <div class="card lg:card-side bg-base-100 shadow-xl info-section">
+            <figure class="lg:w-1/3">
+                <img src="https://wallpapercave.com/wp/wp6347232.jpg" alt="Product Image" class="w-full h-full object-cover">
+            </figure>
+            <div class="card-body lg:w-2/3">
+                <h2 class="card-title text-3xl mb-6">Add New Product</h2>
+                <form method="POST" enctype="multipart/form-data" class="space-y-4">
+                    {% csrf_token %}
+                    <div class="form-control">
+                        <label for="product_name" class="label">
+                            <span class="label-text">Product Name</span>
+                        </label>
+                        <input type="text" name="name" id="product_name" placeholder="Enter product name" class="input input-bordered" required>
+                    </div>
+                    <div class="form-control">
+                        <label for="product_description" class="label">
+                            <span class="label-text">Description</span>
+                        </label>
+                        <textarea name="description" id="product_description" placeholder="Enter product description" class="textarea textarea-bordered h-24" required></textarea>
+                    </div>
+                    <div class="form-control">
+                        <label for="product_price" class="label">
+                            <span class="label-text">Price</span>
+                        </label>
+                        <input type="number" name="price" id="product_price" placeholder="Enter product price" class="input input-bordered" required>
+                    </div>
+                    <div class="form-control">
+                        <label for="product_inventory" class="label">
+                            <span class="label-text">Inventory</span>
+                        </label>
+                        <input type="number" name="inventory" id="product_inventory" placeholder="Enter inventory count" class="input input-bordered" required>
+                    </div>
+                    <div class="form-control">
+                        <label for="product_images" class="label">
+                            <span class="label-text">Images</span>
+                        </label>
+                        <input type="file" name="images" id="product_images" class="file-input file-input-bordered w-full" multiple required>
+                    </div>
+                    <div class="form-control">
+                        <label for="category" class="label">
+                            <span class="label-text">Category</span>
+                        </label>
+                        <select name="category" id="category" class="select select-bordered" required>
+                            <option value="">Select a category</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-control mt-6">
+                        <button type="submit" class="btn btn-primary">Add Product</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script>
         $(document).ready(function() {
             sessionStorage.setItem('currentPage', 'add_product');
         });
-
     </script>
 </body>
 

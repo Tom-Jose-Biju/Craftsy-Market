@@ -1,3 +1,5 @@
+{% load static %}
+{% load custom_filters %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -38,27 +40,53 @@
             margin: 6rem auto 2rem;
         }
         .product-card {
-            background-color: rgba(34, 34, 34, 0.8);
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 30px;
+            height: 300px;
+            display: flex;
+            flex-direction: column;
             transition: all 0.3s ease;
-            transform-style: preserve-3d;
-            perspective: 1000px;
         }
+        
         .product-card:hover {
-            transform: scale(1.05) rotateY(10deg);
-            box-shadow: 0 10px 20px rgba(255, 255, 255, 0.1);
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(255, 255, 255, 0.1);
         }
+        
         .product-image {
-            height: 250px;
+            height: 60%;
             overflow: hidden;
         }
+        
         .product-image img {
             width: 100%;
             height: 100%;
             object-fit: cover;
             transition: all 0.3s ease;
+        }
+        
+        .product-details {
+            height: 40%;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .product-title {
+            font-size: 1rem;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .product-price {
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+        
+        .btn-view-details {
+            font-size: 0.8rem;
+            padding: 5px 10px;
         }
         .product-card:hover .product-image img {
             transform: scale(1.1);
@@ -194,33 +222,36 @@
                         </div>
                     </div>
                     <h2 class="text-center mb-5"><i class="fas fa-gem me-2"></i>Handcrafted Treasures</h2>
-            
-            {% if products %}
-                <div class="row">
-                    {% for product in products %}
+                    <div class="row">
+                        {% for product in products %}
                         <div class="col-md-4 mb-4">
-                            <div class="product-card">
+                            <div class="product-card h-100">
                                 <div class="product-image">
                                     {% if product.images.first %}
-                                            <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}">
-                                        {% else %}
-                                            <img src="https://via.placeholder.com/300x200?text=No+Image" alt="Default Product Image">
-                                        {% endif %}
+                                        <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}">
+                                    {% else %}
+                                        <img src="https://via.placeholder.com/300x200?text=No+Image" alt="Default Product Image">
+                                    {% endif %}
                                 </div>
-                                <div class="product-details">
-                                    <h5 class="product-title"><i class="fas fa-gift me-2"></i>{{ product.name }}</h5>
-                                    <p class="product-description"><i class="fas fa-info-circle me-2"></i>{{ product.description|truncatewords:20 }}</p>
-                                    <p class="product-price"><i class="fas fa-tag me-2"></i>₹{{ product.price }}</p>
-                                    <p class="product-artisan"><i class="fas fa-user-circle me-2"></i>Crafted by: {{ product.artisan.user.username }}</p>
-                                    <a href="{% url 'product_detail' product.id %}" class="btn btn-view-details btn-sm"><i class="fas fa-eye me-2"></i>View Details</a>
+                                <div class="product-details d-flex flex-column justify-content-between">
+                                    <div>
+                                        <h5 class="product-title"><i class="fas fa-gift me-2"></i>{{ product.name }}</h5>
+                                        <p class="product-price"><i class="fas fa-tag me-2"></i>₹{{ product.price }}</p>
+                                    </div>
+                                    <div class="mt-2">
+                                        {% if product.id %}
+                                            <a href="{% url 'product_detail' product.id %}" class="btn btn-view-details btn-sm w-100">View Details</a>
+                                        {% else %}
+                                            <span class="btn btn-view-details btn-sm disabled w-100">View Details</span>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    {% endfor %}
+                        {% endfor %}
+                    </div>
                 </div>
-            {% else %}
-                <p class="text-center"><i class="fas fa-exclamation-triangle me-2"></i>No products available at the moment. Check back soon for amazing handcrafted items!</p>
-            {% endif %}
+            </div>
         </div>
     </div>
     <script>
@@ -241,6 +272,17 @@
     <script>
         $(document).ready(function() {
             sessionStorage.setItem('currentPage', 'products');
+        });
+        document.addEventListener('DOMContentLoaded', function() {
+            var productRatings = document.querySelectorAll('.product-rating');
+            productRatings.forEach(function(rating) {
+                var ratingText = rating.textContent.trim();
+                if (ratingText.includes('reviews')) {
+                    var reviews = JSON.parse(rating.dataset.reviews || '[]');
+                    var avgRating = window.django.avg(reviews, 'rating');
+                    rating.textContent = ratingText.replace(/\(.*?\)/, '(' + avgRating.toFixed(1) + '/5)');
+                }
+            });
         });
     </script>
 </body>

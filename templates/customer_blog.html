@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Craftsy Artisan Blogs</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.1.0/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+            100% { transform: translateY(0px); }
+        }
+        .float { animation: float 6s ease-in-out infinite; }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100">
+    <div class="navbar bg-base-300 text-base-content shadow-lg">
+        <div class="flex-1">
+            <a class="btn btn-ghost normal-case text-xl" href="{% url 'home' %}">Craftsy</a>
+        </div>
+        <div class="flex-none">
+            <ul class="menu menu-horizontal px-1">
+                <li><a href="{% url 'home' %}"><i class="fas fa-home mr-2"></i>Home</a></li>
+                <li><a href="{% url 'products' %}"><i class="fas fa-shopping-bag mr-2"></i>Products</a></li>
+                <li><a class="active" href="{% url 'customer_blog_view' %}"><i class="fas fa-blog mr-2"></i>Artisan Blogs</a></li>
+                {% if user.is_authenticated %}
+                    <li><a href="{% url 'profile' %}"><i class="fas fa-user mr-2"></i>Profile</a></li>
+                    <li><a href="{% url 'logout' %}"><i class="fas fa-sign-out-alt mr-2"></i>Logout</a></li>
+                {% else %}
+                    <li><a href="{% url 'login' %}"><i class="fas fa-sign-in-alt mr-2"></i>Login</a></li>
+                    <li><a href="{% url 'register' %}"><i class="fas fa-user-plus mr-2"></i>Register</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="hero bg-base-200 py-10">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <h1 class="text-5xl font-bold">Artisan Blogs</h1>
+                <p class="py-6">Discover the stories, techniques, and inspirations behind our talented artisans' creations.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mx-auto mt-8 px-4">
+        <div class="flex flex-col lg:flex-row gap-8">
+            <div class="lg:w-2/3">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {% for blog in blogs %}
+                        <div class="card bg-base-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
+                            {% if blog.image %}
+                                <figure><img src="{{ blog.image.url }}" alt="{{ blog.title }}" class="w-full h-48 object-cover" /></figure>
+                            {% else %}
+                                <figure><img src="https://via.placeholder.com/300x200" alt="Placeholder" class="w-full h-48 object-cover" /></figure>
+                            {% endif %}
+                            <div class="card-body">
+                                <h2 class="card-title">{{ blog.title }}</h2>
+                                <p>{{ blog.content|truncatewords:20 }}</p>
+                                <div class="card-actions justify-between items-center mt-4">
+                                    <p class="text-sm">By {{ blog.author.username }} on {{ blog.created_at|date:"F d, Y" }}</p>
+                                    <button class="btn btn-primary btn-sm" onclick="readMore('{{ blog.id }}')">Read More</button>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="col-span-2">
+                            <div class="alert alert-info shadow-lg">
+                                <div>
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current flex-shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    <span>No blogs available at the moment. Check back later for exciting artisan stories!</span>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="lg:w-1/3">
+                <div class="card bg-base-300 shadow-xl">
+                    <div class="card-body">
+                        <h3 class="card-title text-2xl mb-4">Featured Artisans</h3>
+                        <ul class="space-y-4">
+                            <li class="flex items-center space-x-4">
+                                <div class="avatar">
+                                    <div class="w-12 h-12 rounded-full">
+                                        <img src="https://via.placeholder.com/100" alt="Artisan 1" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold">John Doe</h4>
+                                    <p class="text-sm">Woodworking Expert</p>
+                                </div>
+                            </li>
+                            <li class="flex items-center space-x-4">
+                                <div class="avatar">
+                                    <div class="w-12 h-12 rounded-full">
+                                        <img src="https://via.placeholder.com/100" alt="Artisan 2" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold">Jane Smith</h4>
+                                    <p class="text-sm">Pottery Master</p>
+                                </div>
+                            </li>
+                            <li class="flex items-center space-x-4">
+                                <div class="avatar">
+                                    <div class="w-12 h-12 rounded-full">
+                                        <img src="https://via.placeholder.com/100" alt="Artisan 3" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold">Mike Johnson</h4>
+                                    <p class="text-sm">Textile Artist</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card bg-base-300 shadow-xl mt-8">
+                    <div class="card-body">
+                        <h3 class="card-title text-2xl mb-4">Popular Tags</h3>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="badge badge-primary">Woodworking</span>
+                            <span class="badge badge-secondary">Pottery</span>
+                            <span class="badge badge-accent">Textiles</span>
+                            <span class="badge badge-info">Jewelry</span>
+                            <span class="badge badge-success">Painting</span>
+                            <span class="badge badge-warning">Sculpture</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer p-10 bg-base-300 text-base-content mt-16">
+        <div>
+            <span class="footer-title">Services</span> 
+            <a class="link link-hover">Branding</a> 
+            <a class="link link-hover">Design</a> 
+            <a class="link link-hover">Marketing</a> 
+            <a class="link link-hover">Advertisement</a>
+        </div> 
+        <div>
+            <span class="footer-title">Company</span> 
+            <a class="link link-hover">About us</a> 
+            <a class="link link-hover">Contact</a> 
+            <a class="link link-hover">Jobs</a> 
+            <a class="link link-hover">Press kit</a>
+        </div> 
+        <div>
+            <span class="footer-title">Legal</span> 
+            <a class="link link-hover">Terms of use</a> 
+            <a class="link link-hover">Privacy policy</a> 
+            <a class="link link-hover">Cookie policy</a>
+        </div>
+        <div>
+            <span class="footer-title">Newsletter</span> 
+            <div class="form-control w-80">
+                <label class="label">
+                    <span class="label-text">Enter your email address</span>
+                </label> 
+                <div class="relative">
+                    <input type="text" placeholder="username@site.com" class="input input-bordered w-full pr-16" /> 
+                    <button class="btn btn-primary absolute top-0 right-0 rounded-l-none">Subscribe</button>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function readMore(blogId) {
+            // Implement the read more functionality
+            console.log(`Read more for blog ${blogId}`);
+            // You can redirect to a detailed blog page or show a modal with full content
+        }
+    </script>
+</body>
+</html>

@@ -22,15 +22,18 @@ urlpatterns = [
     path('artisan/product/update/<int:product_id>/', views.update_product, name='update_product'),
     path('delete_product/<int:product_id>/', views.delete_product, name='delete_product'),
     path('product/<int:product_id>/', views.product_detail, name='product_detail'),
+    path('artisan/reviews/', views.artisan_reviews, name='artisan_reviews'),
+    path('artisan/orders/', views.artisan_order_details, name='artisan_order_details'),
 
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
     path('admin-dashboard/users/', views.admin_users, name='admin_users'),
     path('admin-dashboard/artisans/', views.admin_artisans, name='admin_artisans'),
+    path('admin-dashboard/products/', views.admin_products, name='admin_products'),
     path('admin-dashboard/add-category/', views.admin_add_category, name='admin_add_category'),
-    path('admin-dashboard/disable-category/<int:category_id>/', views.disable_category, name='admin_disable_category'),
-    path('admin-dashboard/enable-category/<int:category_id>/', views.enable_category, name='admin_enable_category'),
     path('admin-dashboard/edit-category/<int:category_id>/', views.admin_edit_category, name='admin_edit_category'),
     path('admin-dashboard/delete-category/<int:category_id>/', views.admin_delete_category, name='admin_delete_category'),
+    path('admin-dashboard/disable-category/<int:category_id>/', views.disable_category, name='admin_disable_category'),
+    path('admin-dashboard/enable-category/<int:category_id>/', views.enable_category, name='admin_enable_category'),
 
     
     path('deactivate-account/', views.deactivate_account, name='deactivate_account'),
@@ -61,4 +64,9 @@ urlpatterns = [
     path('payment_cancel/', views.payment_cancel, name='payment_cancel'),
     path('order-history/', views.order_history, name='order_history'),
     path('order-detail/<int:order_id>/', views.order_detail, name='order_detail'),
+    path('submit-review/<int:order_item_id>/', views.submit_review, name='submit_review'),
+
+    path('blogs/', views.customer_blog_view, name='customer_blog_view'),
+    path('artisan/blog/write/', views.artisan_blog_write, name='artisan_blog_write'),
+    path('artisan/blog/<int:blog_id>/', views.get_blog_details, name='get_blog_details'),
 ]

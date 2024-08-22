@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artisan Reviews - Craftsy</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        .review-card {
+            background-color: rgba(34, 34, 34, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: transform 0.3s;
+        }
+        .review-card:hover {
+            transform: scale(1.02);
+        }
+        .star-rating {
+            color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'artisan_home' %}">Craftsy</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan_home' %}"><i class="fas fa-home me-2"></i>Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan_products' %}"><i class="fas fa-box me-2"></i>My Products</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'logout' %}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5 pt-5">
+        <h1 class="mb-4">My Product Reviews</h1>
+        
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-dark text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Overall Rating</h5>
+                        <p class="card-text display-4">
+                            {{ average_rating|floatformat:1 }} <i class="fas fa-star text-warning"></i>
+                        </p>
+                        <p class="card-text">Based on {{ total_reviews }} reviews</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card bg-dark text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Rating Distribution</h5>
+                        {% for star, count in rating_distribution.items %}
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="me-2">{{ star }} <i class="fas fa-star text-warning"></i></span>
+                            <div class="progress flex-grow-1" style="height: 20px;">
+                                <div class="progress-bar bg-warning" role="progressbar" style="width: {{ count.percentage }}%;" aria-valuenow="{{ count.percentage }}" aria-valuemin="0" aria-valuemax="100">{{ count.percentage|floatformat:1 }}%</div>
+                            </div>
+                            <span class="ms-2">({{ count.count }})</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% for review in reviews %}
+        <div class="review-card">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">{{ review.product.name }}</h5>
+                <small class="text-muted">{{ review.created_at|date:"F d, Y" }}</small>
+            </div>
+            <div class="star-rating mb-2">
+                {% for i in "12345" %}
+                    {% if forloop.counter <= review.rating %}
+                        <i class="fas fa-star"></i>
+                    {% else %}
+                        <i class="far fa-star"></i>
+                    {% endif %}
+                {% endfor %}
+                <span class="ms-2">{{ review.rating }}/5</span>
+            </div>
+            <p class="mb-1">{{ review.comment }}</p>
+            <small class="text-muted">By {{ review.user.username }}</small>
+        </div>
+        {% empty %}
+        <p>No reviews yet.</p>
+        {% endfor %}
+
+        {% if reviews.has_other_pages %}
+        <nav aria-label="Page navigation" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if reviews.has_previous %}
+                    <li class="page-item"><a class="page-link" href="?page={{ reviews.previous_page_number }}">Previous</a></li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                {% endif %}
+
+                {% for i in reviews.paginator.page_range %}
+                    {% if reviews.number == i %}
+                        <li class="page-item active"><span class="page-link">{{ i }} <span class="sr-only">(current)</span></span></li>
+                    {% else %}
+                        <li class="page-item"><a class="page-link" href="?page={{ i }}">{{ i }}</a></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if reviews.has_next %}
+                    <li class="page-item"><a class="page-link" href="?page={{ reviews.next_page_number }}">Next</a></li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Next</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

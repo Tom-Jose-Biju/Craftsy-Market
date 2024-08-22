@@ -22,6 +22,15 @@ from django.shortcuts import get_object_or_404
 from .models import Category
 from django.db.models import Q
 from django.views.decorators.http import require_http_methods
+from django.db.models import Sum, Avg, Count
+from django.core.serializers.json import DjangoJSONEncoder
+from django.http import JsonResponse
+from .forms import ReviewForm
+from .models import OrderItem, Review
+from django.core.paginator import Paginator
+from .models import Blog
+from .forms import BlogForm
+
 
 
 
@@ -136,6 +145,84 @@ def admin_artisans(request):
     return render(request, 'admin_artisans.html', context)
 
 @login_required
+@login_required
+def admin_products(request):
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
+    products = Product.objects.all().select_related('category', 'artisan__user')
+    total_products = products.count()
+    total_value = products.aggregate(Sum('price'))['price__sum'] or 0
+    average_price = products.aggregate(Avg('price'))['price__avg'] or 0
+
+    categories = Category.objects.annotate(product_count=Count('products'))
+    category_names = list(categories.values_list('name', flat=True))
+    category_counts = list(categories.values_list('product_count', flat=True))
+
+    context = {
+        'products': products,
+        'total_products': total_products,
+        'total_value': round(total_value, 2),
+        'average_price': round(average_price, 2),
+        'category_names': json.dumps(category_names),
+        'category_counts': json.dumps(category_counts),
+    }
+    return render(request, 'admin_products.html', context)
+
+@login_required
+def view_product(request, product_id):
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
+    product = get_object_or_404(Product, id=product_id)
+    return JsonResponse({
+        'id': product.id,
+        'name': product.name,
+        'description': product.description,
+        'price': str(product.price),
+        'stock': product.stock,
+        'category': product.category.name,
+        'artisan': product.artisan.user.username,
+        'created_at': product.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+    })
+
+@login_required
+def edit_product(request, product_id):
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
+    product = get_object_or_404(Product, id=product_id)
+    if request.method == 'POST':
+        # Update product logic here
+        # Remember to handle the form data and save the product
+        messages.success(request, f"Product '{product.name}' has been updated successfully.")
+        return redirect('admin_products')
+    
+    # If it's a GET request, you might want to return a form or product data
+    return JsonResponse({
+        'id': product.id,
+        'name': product.name,
+        'description': product.description,
+        'price': str(product.price),
+        'stock': product.stock,
+        'category_id': product.category.id,
+    })
+
+@login_required
+def delete_product(request, product_id):
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
+    product = get_object_or_404(Product, id=product_id)
+    product.delete()
+    messages.success(request, f"Product '{product.name}' has been deleted successfully.")
+    return JsonResponse({'success': True})
+
+@login_required
 def admin_add_category(request):
     if not request.user.is_staff:
         messages.error(request, "You don't have access to this page.")
@@ -154,35 +241,11 @@ def admin_add_category(request):
     return render(request, 'admin_add_category.html', {'categories': categories})
 
 @login_required
-@require_POST
-def enable_category(request, category_id):
-    if not request.user.is_staff:
-        messages.error(request, "You don't have access to this page.")
-        return redirect('home')
-    
-    category = get_object_or_404(Category, id=category_id)
-    category.is_active = True  # Set the category to active
-    category.save()
-    
-    messages.success(request, f"Category '{category.name}' has been enabled successfully.")
-    return redirect('admin_add_category')
-
-@login_required
-@require_POST
-def disable_category(request, category_id):
-    if not request.user.is_staff:
-        messages.error(request, "You don't have access to this page.")
-        return redirect('home')
-    
-    category = get_object_or_404(Category, id=category_id)
-    category.is_active = False  # Set the category to inactive
-    category.save()
-    
-    messages.success(request, f"Category '{category.name}' has been disabled successfully.")
-    return redirect('admin_add_category')
-
-@login_required
 def admin_edit_category(request, category_id):
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
     category = get_object_or_404(Category, id=category_id)
     
     if request.method == 'POST':
@@ -195,15 +258,43 @@ def admin_edit_category(request, category_id):
         else:
             messages.error(request, "Category name cannot be empty.")
     
-    return render(request, 'edit_category.html', {'category': category})
+    return render(request, 'admin_add_category.html', {'category': category})
 
 @login_required
 @require_POST
 def admin_delete_category(request, category_id):
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
     category = get_object_or_404(Category, id=category_id)
     category.delete()
     messages.success(request, f"Category '{category.name}' has been deleted successfully.")
     return redirect('admin_add_category')
+
+@login_required
+@require_POST
+def disable_category(request, category_id):
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': "You don't have access to this action."}, status=403)
+    
+    category = get_object_or_404(Category, id=category_id)
+    category.is_active = False
+    category.save()
+    
+    return JsonResponse({'success': True})
+
+@login_required
+@require_POST
+def enable_category(request, category_id):
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': "You don't have access to this action."}, status=403)
+    
+    category = get_object_or_404(Category, id=category_id)
+    category.is_active = True
+    category.save()
+    
+    return JsonResponse({'success': True})
 
 # Artisan Views
 def artisan_register(request):
@@ -236,17 +327,26 @@ def artisan_profile(request):
             artisan.profile_picture = request.FILES['profile_picture']
             artisan.save()
             messages.success(request, 'Profile picture updated successfully.')
+            return redirect('artisan_profile')
         else:
             form = ArtisanProfileForm(request.POST, instance=artisan)
             if form.is_valid():
                 form.save()
                 messages.success(request, 'Profile updated successfully.')
-                return redirect('artisan_profile')  # Redirect to avoid resubmission
+                return redirect('artisan_profile')
             else:
                 messages.error(request, 'Error updating profile. Please check the form.')
+    else:
+        form = ArtisanProfileForm(instance=artisan)
     
-    form = ArtisanProfileForm(instance=artisan)
-    return render(request, 'artisan_profile.html', {'artisan': artisan, 'form': form})
+    context = {
+        'artisan': artisan,
+        'form': form,
+        'total_products': Product.objects.filter(artisan=artisan).count(),
+        'total_orders': Order.objects.filter(items__product__artisan=artisan).distinct().count(),
+        'average_rating': Review.objects.filter(product__artisan=artisan).aggregate(Avg('rating'))['rating__avg'] or 0,
+    }
+    return render(request, 'artisan_profile.html', context)
 
 def artisanview(request):
     return render(request, 'artisan.html')
@@ -301,11 +401,16 @@ def products(request):
     if category_id:
         products = products.filter(category_id=category_id)
 
+   
+    for product in products:
+        product.reviews_json = json.dumps(list(product.reviews.values('rating')), cls=DjangoJSONEncoder)
+
     context = {
         'products': products,
         'categories': categories,
         'search_query': search_query,
     }
+    
     return render(request, 'products.html', context)
 
 @login_required
@@ -360,16 +465,42 @@ def delete_product(request, product_id):
     messages.success(request, "Product deleted successfully!")
     return redirect('artisan_products')
 
+from django.db.models import Avg
+from .models import Review, Product
+from .forms import ReviewForm
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+
 def product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id)
-    images = product.images.all()
-    related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]
+    reviews = product.reviews.all().order_by('-created_at')
+    average_rating = reviews.aggregate(Avg('rating'))['rating__avg']
+    
     context = {
         'product': product,
-        'images': images,
-        'related_products': related_products,
+        'reviews': reviews,
+        'average_rating': average_rating,
     }
     return render(request, 'product_detail.html', context)
+
+@login_required
+def artisan_order_details(request):
+    artisan = get_object_or_404(Artisan, user=request.user)
+    orders = Order.objects.filter(items__product__artisan=artisan).distinct().order_by('-created_at')
+
+    # Pagination
+    paginator = Paginator(orders, 10)  # Show 10 orders per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'orders': page_obj,
+        'total_orders': orders.count(),
+        'pending_orders': orders.filter(status='Processing').count(),
+        'completed_orders': orders.filter(status='Delivered').count(),
+        'total_revenue': orders.filter(status='Delivered').aggregate(Sum('total_price'))['total_price__sum'] or 0,
+    }
+    return render(request, 'artisan_order_details.html', context)
 
 # Profile Views
 @login_required
@@ -684,8 +815,76 @@ def order_history(request):
 
 @login_required
 def order_detail(request, order_id):
-    order = Order.objects.get(id=order_id, user=request.user)
+    order = get_object_or_404(Order, id=order_id, user=request.user)
     return render(request, 'order_detail.html', {'order': order})
+
+@login_required
+def submit_review(request, order_item_id):
+    order_item = get_object_or_404(OrderItem, id=order_item_id, order__user=request.user)
+    
+    if request.method == 'POST':
+        form = ReviewForm(request.POST)
+        if form.is_valid():
+            review = form.save(commit=False)
+            review.user = request.user
+            review.product = order_item.product
+            review.save()
+            return JsonResponse({'success': True, 'message': 'Your review has been submitted successfully.'})
+        else:
+            return JsonResponse({'success': False, 'errors': form.errors})
+    else:
+        form = ReviewForm()
+    
+    context = {
+        'form': form,
+        'order_item': order_item,
+    }
+    return render(request, 'review_modal.html', context)
+
+@login_required
+def artisan_reviews(request):
+    artisan = get_object_or_404(Artisan, user=request.user)
+    reviews = Review.objects.filter(product__artisan=artisan).order_by('-created_at')
+    
+    paginator = Paginator(reviews, 10)  # Show 10 reviews per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    total_reviews = reviews.count()
+    average_rating = reviews.aggregate(Avg('rating'))['rating__avg'] or 0
+
+    rating_distribution = {
+        5: {'count': reviews.filter(rating=5).count(), 'percentage': 0},
+        4: {'count': reviews.filter(rating=4).count(), 'percentage': 0},
+        3: {'count': reviews.filter(rating=3).count(), 'percentage': 0},
+        2: {'count': reviews.filter(rating=2).count(), 'percentage': 0},
+        1: {'count': reviews.filter(rating=1).count(), 'percentage': 0},
+    }
+
+    for star, data in rating_distribution.items():
+        data['percentage'] = (data['count'] / total_reviews) * 100 if total_reviews > 0 else 0
+
+    context = {
+        'reviews': page_obj,
+        'average_rating': average_rating,
+        'total_reviews': total_reviews,
+        'rating_distribution': rating_distribution,
+    }
+
+    return render(request, 'artisan_reviews.html', context)
+
+@login_required
+def artisan_dashboard(request):
+    context = {
+        'total_products': Product.objects.filter(artisan=request.user).count(),
+        'pending_orders': Order.objects.filter(items__product__artisan=request.user, status='Processing').distinct().count(),
+        'total_earnings': Order.objects.filter(items__product__artisan=request.user, status='Delivered').aggregate(Sum('total_price'))['total_price__sum'] or 0,
+        'average_rating': Review.objects.filter(product__artisan=request.user).aggregate(Avg('rating'))['rating__avg'] or 0,
+        'top_products': Product.objects.filter(artisan=request.user).annotate(sales_count=Count('orderitem')).order_by('-sales_count')[:5],
+        'recent_activities': RecentActivity.objects.filter(artisan=request.user).order_by('-timestamp')[:5],
+    }
+    return render(request, 'artisan.html', context)
+
 
 @receiver(post_save, sender=User)
 def create_user_cart(sender, instance, created, **kwargs):
@@ -704,3 +903,47 @@ def merge_carts(request, user):
 
     # Clear the session cart
     request.session['cart'] = {}
+
+def customer_blog_view(request):
+    blogs = Blog.objects.all().order_by('-created_at')
+    return render(request, 'customer_blog.html', {'blogs': blogs})
+
+@login_required
+@login_required
+def artisan_blog_write(request):
+    if request.method == 'POST':
+        if 'blog_id' in request.POST:  # Edit or Delete operation
+            blog_id = request.POST['blog_id']
+            blog = get_object_or_404(Blog, id=blog_id, author=request.user)
+            
+            if 'title' in request.POST:  # Edit operation
+                form = BlogForm(request.POST, request.FILES, instance=blog)
+                if form.is_valid():
+                    form.save()
+                    messages.success(request, 'Blog post updated successfully!')
+            else:  # Delete operation
+                blog.delete()
+                messages.success(request, 'Blog post deleted successfully!')
+        else:  # New blog post
+            form = BlogForm(request.POST, request.FILES)
+            if form.is_valid():
+                blog = form.save(commit=False)
+                blog.author = request.user
+                blog.save()
+                messages.success(request, 'Blog post created successfully!')
+        
+        return redirect('artisan_blog_write')
+    else:
+        form = BlogForm()
+    
+    artisan_blogs = Blog.objects.filter(author=request.user).order_by('-created_at')
+    return render(request, 'artisan_blog_write.html', {'form': form, 'artisan_blogs': artisan_blogs})
+
+@login_required
+def get_blog_details(request, blog_id):
+    blog = get_object_or_404(Blog, id=blog_id, author=request.user)
+    return JsonResponse({
+        'title': blog.title,
+        'content': blog.content,
+    })
+    

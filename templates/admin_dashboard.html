@@ -1,182 +1,72 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Craftsy</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.5.0/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
-        :root {
-            --primary-color: #ff6b6b;
-            --secondary-color: #1a1a1a;
-            --accent-color: #e74c3c;
-            --text-color: #fff;
-            --bg-color: #121212;
-            --card-bg: #2c2c2c;
-        }
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .navbar {
-            background-color: var(--secondary-color);
-            border-bottom: 2px solid var(--primary-color);
-        }
-        .navbar-brand {
-            font-family: 'Arial', sans-serif;
-            font-size: 1.5rem;
-            color: var(--primary-color) !important;
-            font-weight: bold;
-        }
-        .sidebar {
-            background-color: var(--secondary-color);
-            min-height: calc(100vh - 56px);
-            padding-top: 20px;
-            border-right: 2px solid var(--primary-color);
-        }
-        .sidebar .nav-link {
-            color: #fff;
-            padding: 10px 20px;
-            transition: all 0.3s ease;
-        }
-        .sidebar .nav-link:hover {
-            background-color: rgba(255, 107, 107, 0.3);
-        }
-        .sidebar .nav-link.active {
-            background-color: var(--primary-color);
-        }
-        .main-content {
-            padding: 20px;
-        }
-        .card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-            transition: transform 0.3s;
-            background-color: white;
-        }
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        .card-icon {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            color: var(--primary-color);
-        }
-        .table {
-            background-color: var(--card-bg);
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        .table th {
-            background-color: var(--primary-color);
-            color: #fff;
-        }
-    </style>
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'admin_dashboard' %}">Craftsy Admin</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'logout' %}">Logout</a>
-                    </li>
-                </ul>
+<body class="bg-base-200">
+    <div class="drawer lg:drawer-open">
+        <input id="my-drawer-2" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content flex flex-col">
+            <!-- Navbar -->
+            <div class="navbar bg-base-100 shadow-lg">
+                <div class="flex-none lg:hidden">
+                    <label for="my-drawer-2" class="btn btn-square btn-ghost">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </label>
+                </div> 
+                <div class="flex-1">
+                    <a class="btn btn-ghost normal-case text-xl">Craftsy Admin</a>
+                </div>
+                <div class="flex-none">
+                    <a href="{% url 'logout' %}" class="btn btn-ghost">Logout</a>
+                </div>
             </div>
-        </div>
-    </nav>
-
-    <div class="container-fluid">
-        <div class="row">
-            <nav class="col-md-2 d-none d-md-block sidebar">
-                <div class="position-sticky">
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link active" href="{% url 'admin_dashboard' %}">
-                                <i class="fas fa-tachometer-alt me-2"></i>Dashboard
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'admin_users' %}">
-                                <i class="fas fa-users me-2"></i>Users
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'admin_artisans' %}">
-                                <i class="fas fa-palette me-2"></i>Artisans
-                            </a>
-                            <ul class="nav flex-column ms-3">
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{% url 'admin_add_category' %}">
-                                        <i class="fas fa-plus me-2"></i>Add Category
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#">
-                                <i class="fas fa-box me-2"></i>Products
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </nav>
-
-            <main class="col-md-10 ms-sm-auto px-md-4 main-content">
-                <h1 class="mt-4 mb-4">Dashboard</h1>
-                <div class="row">
-                    <div class="col-md-3 mb-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <i class="fas fa-users card-icon"></i>
-                                <h5 class="card-title">Total Users</h5>
-                                <p class="card-text display-4">{{ total_users }}</p>
-                            </div>
+            
+            <!-- Page content -->
+            <div class="p-4">
+                <h1 class="text-3xl font-bold mb-6">Dashboard</h1>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="stat bg-primary text-primary-content">
+                        <div class="stat-figure text-primary-content">
+                            <i class="fas fa-users text-3xl"></i>
                         </div>
+                        <div class="stat-title">Total Users</div>
+                        <div class="stat-value">{{ total_users }}</div>
                     </div>
-                    <div class="col-md-3 mb-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <i class="fas fa-palette card-icon"></i>
-                                <h5 class="card-title">Total Artisans</h5>
-                                <p class="card-text display-4">{{ total_artisans }}</p>
-                            </div>
+                    <div class="stat bg-secondary text-secondary-content">
+                        <div class="stat-figure text-secondary-content">
+                            <i class="fas fa-palette text-3xl"></i>
                         </div>
+                        <div class="stat-title">Total Artisans</div>
+                        <div class="stat-value">{{ total_artisans }}</div>
                     </div>
-                    <div class="col-md-3 mb-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <i class="fas fa-box card-icon"></i>
-                                <h5 class="card-title">Total Products</h5>
-                                <p class="card-text display-4">{{ total_products }}</p>
-                            </div>
+                    <div class="stat bg-accent text-accent-content">
+                        <div class="stat-figure text-accent-content">
+                            <i class="fas fa-box text-3xl"></i>
                         </div>
+                        <div class="stat-title">Total Products</div>
+                        <div class="stat-value">{{ total_products }}</div>
                     </div>
-                    <div class="col-md-3 mb-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <i class="fas fa-chart-line card-icon"></i>
-                                <h5 class="card-title">Sales</h5>
-                                <p class="card-text display-4">$0</p>
-                            </div>
+                    <div class="stat bg-neutral text-neutral-content">
+                        <div class="stat-figure text-neutral-content">
+                            <i class="fas fa-chart-line text-3xl"></i>
                         </div>
+                        <div class="stat-title">Sales</div>
+                        <div class="stat-value">$0</div>
                     </div>
                 </div>
 
-                <h2 class="mt-4 mb-4">Recent Products</h2>
-                <div class="table-responsive">
-                    <table class="table table-hover">
+                <h2 class="text-2xl font-bold mt-8 mb-4">Recent Products</h2>
+                <div class="overflow-x-auto">
+                    <table class="table w-full">
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <!-- <th>Artisan</th> -->
                                 <th>Price</th>
                                 <th>Created At</th>
                             </tr>
@@ -185,7 +75,6 @@
                             {% for product in recent_products %}
                             <tr>
                                 <td>{{ product.name }}</td>
-                                <!-- <td>{{ product.artisan.username }}</td> -->
                                 <td>${{ product.price }}</td>
                                 <td>{{ product.created_at|date:"M d, Y" }}</td>
                             </tr>
@@ -194,40 +83,48 @@
                     </table>
                 </div>
 
-                <h2 class="mt-4 mb-4">Static Elements</h2>
-                <div class="row">
-                    <div class="col-md-4 mb-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <i class="fas fa-cogs card-icon"></i>
-                                <h5 class="card-title">Settings</h5>
-                                <p class="card-text">Manage your application settings.</p>
+                <h2 class="text-2xl font-bold mt-8 mb-4">Quick Actions</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body">
+                            <h2 class="card-title"><i class="fas fa-cogs mr-2"></i>Settings</h2>
+                            <p>Manage your application settings.</p>
+                            <div class="card-actions justify-end">
+                                <button class="btn btn-primary">Go to Settings</button>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4 mb-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <i class="fas fa-chart-pie card-icon"></i>
-                                <h5 class="card-title">Analytics</h5>
-                                <p class="card-text">View your analytics and reports.</p>
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body">
+                            <h2 class="card-title"><i class="fas fa-chart-pie mr-2"></i>Analytics</h2>
+                            <p>View your analytics and reports.</p>
+                            <div class="card-actions justify-end">
+                                <button class="btn btn-primary">View Analytics</button>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4 mb-4">
-                        <div class="card">
-                            <div class="card-body text-center">
-                                <i class="fas fa-bell card-icon"></i>
-                                <h5 class="card-title">Notifications</h5>
-                                <p class="card-text">Check your notifications and alerts.</p>
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body">
+                            <h2 class="card-title"><i class="fas fa-bell mr-2"></i>Notifications</h2>
+                            <p>Check your notifications and alerts.</p>
+                            <div class="card-actions justify-end">
+                                <button class="btn btn-primary">View Notifications</button>
                             </div>
                         </div>
                     </div>
                 </div>
-            </main>
+            </div>
+        </div> 
+        <div class="drawer-side">
+            <label for="my-drawer-2" class="drawer-overlay"></label> 
+            <ul class="menu p-4 w-80 h-full bg-base-200 text-base-content">
+                <li><a href="{% url 'admin_dashboard' %}" class="active"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
+                <li><a href="{% url 'admin_users' %}"><i class="fas fa-users mr-2"></i>Users</a></li>
+                <li><a href="{% url 'admin_artisans' %}"><i class="fas fa-palette mr-2"></i>Artisans</a></li>
+                <li><a href="{% url 'admin_add_category' %}"><i class="fas fa-plus mr-2"></i>Add Category</a></li>
+                <li><a href="{% url 'admin_products' %}"><i class="fas fa-box mr-2"></i>Products</a></li>
+            </ul>
         </div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

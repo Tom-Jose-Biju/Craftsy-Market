@@ -3,8 +3,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 
-from .models import Artisan, Product, ProductImage, Profile, User
-
+from .models import Artisan, Product, ProductImage, Profile, User, Review, Blog
 
 class MultipleFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
@@ -104,4 +103,22 @@ class UserRegistrationForm(UserCreationForm):
         if User.objects.filter(email=email).exists():
             raise forms.ValidationError("Email is already in use.")
         return email
-    
+
+class ReviewForm(forms.ModelForm):
+    class Meta:
+        model = Review
+        fields = ['rating', 'comment']
+        widgets = {
+            'rating': forms.Select(choices=[(i, i) for i in range(1, 6)]),
+            'comment': forms.Textarea(attrs={'rows': 4}),
+        }
+
+class BlogForm(forms.ModelForm):
+    class Meta:
+        model = Blog
+        fields = ['title', 'content', 'image']
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'form-control'}),
+            'content': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
+            'image': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
+        }
