@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Write Review - Craftsy</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.5.0/dist/full.css" rel="stylesheet" type="text/css" />
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-top: 4rem; /* Adjusted to match navbar height */
+        }
+        .container {
+            margin-top: 1rem; /* Reduced top margin */
+        }
+        .btn-primary {
+            background-color: #ff6b6b;
+            border-color: #ff6b6b;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #0fac4b;
+            border-color: #0fac4b;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+        }
+        .review {
+            background-color: #1e1e1e;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+        .review p {
+            margin: 0;
+        }
+        .static-element {
+            background-color: #2a2a2a;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .navbar {
+            background-color: rgba(18, 18, 18, 0.9);
+            backdrop-filter: blur(10px);
+            height: 4rem;
+            padding: 0.5rem 1rem;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+        }
+        .navbar .menu-horizontal {
+            display: flex;
+            align-items: center;
+        }
+        .navbar .menu-horizontal li {
+            margin-right: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar bg-base-300 fixed-top">
+        <div class="container">
+            <div class="flex-1">
+                <a class="btn btn-ghost normal-case text-xl" href="{% url 'home' %}">Craftsy</a>
+            </div>
+            <div class="flex-none">
+                <ul class="menu menu-horizontal px-1">
+                    <li><a href="{% url 'home' %}"><i class="fas fa-home me-2"></i>Home</a></li>
+                    <li><a href="{% url 'products' %}"><i class="fas fa-shopping-bag me-2"></i>Products</a></li>
+                    {% if user.is_authenticated %}
+                        <li><a href="{% url 'customer_blog_view' %}"><i class="fas fa-blog me-2"></i>Artisan Blogs</a></li>
+                        <li><a href="{% url 'profile' %}"><i class="fas fa-user me-2"></i>Profile</a></li>
+                        <li><a href="{% url 'wishlist' %}"><i class="fas fa-heart me-2"></i>Wishlist</a></li>
+                        <li><a href="{% url 'order_history' %}"><i class="fas fa-history me-2"></i>Orders</a></li>
+                        <li><a href="{% url 'cart' %}"><i class="fas fa-shopping-cart me-2"></i>Cart</a></li>
+                        <li>
+                            <form action="{% url 'logout' %}" method="post" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-ghost normal-case"><i class="fas fa-sign-out-alt me-2"></i>Logout</button>
+                            </form>
+                        </li>
+                    {% else %}
+                        <li><a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Login</a></li>
+                        <li><a href="{% url 'register' %}" class="btn btn-ghost btn-sm">Register</a></li>
+                        <li><a href="{% url 'artisanview' %}" class="btn btn-primary btn-sm">Artisan?</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="margin-top: 5rem;">
+        <div class="static-element">
+            <h2>Welcome to the Review Page</h2>
+            <p>We value your feedback. Please take a moment to write a review for your purchased product.</p>
+        </div>
+
+        <h1>Write a Review for {{ order_item.product.name }}</h1>
+        <form id="reviewForm" action="{% url 'submit_review' order_item.id %}" method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="rating" class="form-label">Rating</label>
+                <input type="number" class="form-control" id="rating" name="rating" min="1" max="5" required>
+            </div>
+            <div class="mb-3">
+                <label for="comment" class="form-label">Comment</label>
+                <textarea class="form-control" id="comment" name="comment" rows="3" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit Review</button>
+        </form>
+
+        <div id="alertContainer" class="mt-3" style="display: none;"></div>
+
+        <h2 class="mt-5">Your Reviews</h2>
+        {% for review in reviews %}
+        <div class="review">
+            <p><strong>Rating:</strong> {{ review.rating }}</p>
+            <p><strong>Comment:</strong> {{ review.comment }}</p>
+            <button class="btn btn-sm btn-danger" onclick="confirmDeleteReview('{{ review.id }}')">Delete Review</button>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alertModal" class="modal">
+        <div class="modal-box">
+            <h3 id="alertTitle" class="font-bold text-lg"></h3>
+            <p id="alertMessage" class="py-4"></p>
+            <div class="modal-action">
+                <button id="closeAlertModal" class="btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Delete Modal -->
+    <div id="confirmDeleteModal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Confirm Delete</h3>
+            <p class="py-4">Are you sure you want to delete this review?</p>
+            <div class="modal-action">
+                <button id="confirmDelete" class="btn btn-error">Delete</button>
+                <button id="cancelDelete" class="btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#reviewForm').on('submit', function(e) {
+                e.preventDefault();
+                $.ajax({
+                    url: $(this).attr('action'),
+                    method: 'POST',
+                    data: $(this).serialize(),
+                    success: function(response) {
+                        if (response.success) {
+                            showAlert('Success', 'Review submitted successfully!');
+                            $('#reviewForm')[0].reset();
+                        } else {
+                            showAlert('Error', 'Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        showAlert('Error', 'An error occurred while submitting the review. Please try again.');
+                    }
+                });
+            });
+
+            function showAlert(title, message) {
+                $('#alertTitle').text(title);
+                $('#alertMessage').text(message);
+                $('#alertModal').addClass('modal-open');
+            }
+
+            $('#closeAlertModal').on('click', function() {
+                $('#alertModal').removeClass('modal-open');
+            });
+
+            window.confirmDeleteReview = function(reviewId) {
+                $('#confirmDeleteModal').addClass('modal-open');
+                $('#confirmDelete').data('reviewId', reviewId);
+            }
+
+            $('#confirmDelete').on('click', function() {
+                var reviewId = $(this).data('reviewId');
+                deleteReview(reviewId);
+                $('#confirmDeleteModal').removeClass('modal-open');
+            });
+
+            $('#cancelDelete').on('click', function() {
+                $('#confirmDeleteModal').removeClass('modal-open');
+            });
+
+            function deleteReview(reviewId) {
+                $.ajax({
+                    url: `/delete-review/${reviewId}/`,
+                    method: 'POST',
+                    data: {
+                        csrfmiddlewaretoken: '{{ csrf_token }}'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            showAlert('Success', 'Review deleted successfully!');
+                            location.reload();
+                        } else {
+                            showAlert('Error', 'Error: ' + response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        showAlert('Error', 'An error occurred while deleting the review. Please try again.');
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -24,6 +24,8 @@ urlpatterns = [
     path('product/<int:product_id>/', views.product_detail, name='product_detail'),
     path('artisan/reviews/', views.artisan_reviews, name='artisan_reviews'),
     path('artisan/orders/', views.artisan_order_details, name='artisan_order_details'),
+    path('delete-review/<int:review_id>/', views.delete_review, name='delete_review'),
+    path('write-review/<int:order_item_id>/', views.write_review, name='write_review'),
 
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
     path('admin-dashboard/users/', views.admin_users, name='admin_users'),
@@ -69,4 +71,5 @@ urlpatterns = [
     path('blogs/', views.customer_blog_view, name='customer_blog_view'),
     path('artisan/blog/write/', views.artisan_blog_write, name='artisan_blog_write'),
     path('artisan/blog/<int:blog_id>/', views.get_blog_details, name='get_blog_details'),
+    path('delete-blog/<int:blog_id>/', views.delete_blog, name='delete_blog'),
 ]

@@ -19,6 +19,13 @@
                     {{ item.product.name }}
                     <span class="badge bg-secondary ms-2">x{{ item.quantity }}</span>
                     <span class="float-end">${{ item.price }}</span>
+                    {% if order.status == 'Delivered' %}
+                        {% if not item.review %}
+                            <button onclick="openReviewModal({{ item.id }})" class="btn btn-write-review">
+                                <i class="fas fa-star me-2"></i>Write a Review
+                            </button>
+                        {% endif %}
+                    {% endif %}
                 </li>
             {% endfor %}
         </ul>

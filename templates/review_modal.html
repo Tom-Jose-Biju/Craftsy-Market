@@ -1,62 +1,40 @@
-<div class="modal-header bg-dark text-light">
-    <h5 class="modal-title"><i class="fas fa-star me-2"></i>Write a Review</h5>
-    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+<div class="modal-header">
+    <h5 class="modal-title" id="reviewModalLabel">Write a Review</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
-<div class="modal-body bg-dark text-light">
-    <form id="reviewForm" method="post" action="{% url 'submit_review' order_item.id %}">
+<div class="modal-body">
+    <form id="reviewForm" action="{% url 'submit_review' order_item_id=order_item.id %}" method="post">
         {% csrf_token %}
-        <div class="mb-3">
-            <label for="id_rating" class="form-label">Rating:</label>
-            <div class="star-rating">
-                {% for i in "12345" %}
-                    <input type="radio" id="star{{ i }}" name="rating" value="{{ i }}" />
-                    <label for="star{{ i }}" title="{{ i }} stars">
-                        <i class="fas fa-star"></i>
-                    </label>
-                {% endfor %}
-            </div>
-        </div>
-        <div class="mb-3">
-            <label for="id_comment" class="form-label">Comment:</label>
-            {{ form.comment }}
+        {{ form.as_p }}
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="submit" class="btn btn-primary">Submit Review</button>
         </div>
     </form>
 </div>
-<div class="modal-footer bg-dark">
-    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-    <button type="button" class="btn btn-primary" onclick="submitReview()">Submit Review</button>
-</div>
-
-<style>
-    .modal-content {
-        background-color: #1a1a1a;
-        color: #e0e0e0;
-    }
-    .star-rating {
-        display: inline-block;
-        direction: rtl;
-    }
-    .star-rating input[type="radio"] {
-        display: none;
-    }
-    .star-rating label {
-        color: #bbb;
-        font-size: 1.5rem;
-        padding: 0;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-    .star-rating label:hover,
-    .star-rating label:hover ~ label,
-    .star-rating input[type="radio"]:checked ~ label {
-        color: #f1c40f;
-    }
-    #id_comment {
-        width: 100%;
-        background-color: #2a2a2a;
-        color: #e0e0e0;
-        border: 1px solid #444;
-        border-radius: 5px;
-        padding: 10px;
-    }
-</style>
+<script>
+$(document).ready(function() {
+    $('#reviewForm').on('submit', function(e) {
+        e.preventDefault();
+        var form = $(this);
+        $.ajax({
+            url: form.attr('action'),
+            method: 'POST',
+            data: form.serialize(),
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+                    $('#reviewModal').modal('hide');
+                    location.reload();
+                } else {
+                    alert('Error: ' + JSON.stringify(response.errors));
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error("Error submitting review:", status, error);
+                alert('An error occurred while submitting the review. Please try again.');
+            }
+        });
+    });
+});
+</script>

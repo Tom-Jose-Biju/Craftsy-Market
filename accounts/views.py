@@ -819,8 +819,9 @@ def order_detail(request, order_id):
     return render(request, 'order_detail.html', {'order': order})
 
 @login_required
-def submit_review(request, order_item_id):
+def write_review(request, order_item_id):
     order_item = get_object_or_404(OrderItem, id=order_item_id, order__user=request.user)
+    reviews = Review.objects.filter(user=request.user, product=order_item.product)
     
     if request.method == 'POST':
         form = ReviewForm(request.POST)
@@ -829,10 +830,37 @@ def submit_review(request, order_item_id):
             review.user = request.user
             review.product = order_item.product
             review.save()
+            return redirect('order_detail', order_id=order_item.order.id)
+    else:
+        form = ReviewForm()
+    
+    return render(request, 'write_review.html', {'form': form, 'order_item': order_item, 'reviews': reviews})
+
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+@login_required
+def submit_review(request, order_item_id):
+    logger.info(f"Received request for order_item_id: {order_item_id}")
+    order_item = get_object_or_404(OrderItem, id=order_item_id, order__user=request.user)
+    
+    if request.method == 'POST':
+        logger.info("Processing POST request for review submission")
+        form = ReviewForm(request.POST)
+        if form.is_valid():
+            review = form.save(commit=False)
+            review.user = request.user
+            review.product = order_item.product
+            review.save()
+            logger.info("Review submitted successfully")
             return JsonResponse({'success': True, 'message': 'Your review has been submitted successfully.'})
         else:
+            logger.warning(f"Form validation failed: {form.errors}")
             return JsonResponse({'success': False, 'errors': form.errors})
     else:
+        logger.info("Rendering review form")
         form = ReviewForm()
     
     context = {
@@ -840,6 +868,13 @@ def submit_review(request, order_item_id):
         'order_item': order_item,
     }
     return render(request, 'review_modal.html', context)
+
+@login_required
+@require_POST
+def delete_review(request, review_id):
+    review = get_object_or_404(Review, id=review_id, user=request.user)
+    review.delete()
+    return JsonResponse({'success': True, 'message': 'Review deleted successfully!'})
 
 @login_required
 def artisan_reviews(request):
@@ -947,3 +982,10 @@ def get_blog_details(request, blog_id):
         'content': blog.content,
     })
     
+
+@login_required
+@require_POST
+def delete_blog(request, blog_id):
+    blog = get_object_or_404(Blog, id=blog_id, author=request.user)
+    blog.delete()
+    return JsonResponse({'success': True, 'message': 'Blog deleted successfully!'})
