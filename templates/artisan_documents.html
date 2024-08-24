@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artisan Documents - Craftsy Market</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 0.5rem 1rem;
+        }
+        .navbar-brand {
+            font-size: 1.25rem;
+        }
+        .navbar-nav .nav-link {
+            padding: 0.25rem 0.5rem;
+        }
+        .container {
+            margin-top: 60px;
+        }
+        .card {
+            background-color: rgba(34, 34, 34, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            transition: transform 0.3s;
+        }
+        .card:hover {
+            transform: scale(1.02);
+        }
+        h2, h3 {
+            color: #ff6b6b;
+        }
+        h4,p{
+            color: white;
+        }
+        .btn-primary {
+            background-color: #4caf50;
+            border: none;
+        }
+        .btn-primary:hover {
+            background-color: #45a049;
+        }
+        .document-card {
+            background-color: rgba(50, 50, 50, 0.8);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .document-card i {
+            color: #ff6b6b;
+        }
+        .document-card p {
+            margin-bottom: 10px;
+            color: white;
+        }
+        .btn-info {
+            background-color: #17a2b8;
+            border: none;
+            color: white;
+        }
+        .btn-info:hover {
+            background-color: #138496;
+            color: white;
+        }
+        .fixed-top{
+            position: relative;
+            top: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'artisan_home' %}">Craftsy</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisanview' %}"><i class="fas fa-home me-2"></i>Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan_profile1' %}"><i class="fas fa-user me-2"></i>Profile</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'add_product' %}"><i class="fas fa-plus-circle me-2"></i>Add Product</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan_products' %}"><i class="fas fa-box me-2"></i>My Products</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'logout' %}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2 class="mb-4">Artisan Documents</h2>
+        
+        <div class="card mb-4">
+            <h3>GST Information</h3>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="gst_number" class="form-label">GST Number</label>
+                    <input type="text" class="form-control" id="gst_number" name="gst_number" value="{{ artisan.gst_number }}">
+                </div>
+                <div class="mb-3">
+                    <label for="gst_certificate" class="form-label">GST Certificate</label>
+                    <input type="file" class="form-control" id="gst_certificate" name="gst_certificate">
+                </div>
+                <button type="submit" class="btn btn-primary">Update GST Information</button>
+            </form>
+        </div>
+    
+        <div class="card mb-4">
+            <h3>Authenticity Certificates</h3>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="product" class="form-label">Select Product</label>
+                    <select class="form-select" id="product" name="product">
+                        {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="authenticity_document" class="form-label">Authenticity Certificate</label>
+                    <input type="file" class="form-control" id="authenticity_document" name="authenticity_document">
+                </div>
+                <button type="submit" class="btn btn-primary">Upload Authenticity Certificate</button>
+            </form>
+        </div>
+    
+        <div class="card">
+            <h3>Uploaded Documents</h3>
+            <div class="row">
+                <div class="col-md-6">
+                    <h4>GST Certificate</h4>
+                    {% if artisan.gst_certificate %}
+                        <div class="document-card">
+                            <i class="fas fa-file-alt fa-3x mb-2"></i>
+                            <p>GST Certificate</p>
+                            <a href="{{ artisan.gst_certificate.url }}" class="btn btn-sm btn-info" target="_blank">View</a>
+                        </div>
+                    {% else %}
+                        <p>No GST certificate uploaded yet.</p>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <h4>Authenticity Certificates</h4>
+                    {% if authenticity_documents %}
+                        <div class="row">
+                            {% for doc in authenticity_documents %}
+                                <div class="col-md-6 mb-3">
+                                    <div class="document-card">
+                                        <i class="fas fa-certificate fa-3x mb-2"></i>
+                                        <p>{{ doc.product.name }}</p>
+                                        <a href="{{ doc.document.url }}" class="btn btn-sm btn-info" target="_blank">View</a>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p>No authenticity certificates uploaded yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

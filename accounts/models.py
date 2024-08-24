@@ -42,9 +42,13 @@ class Artisan(models.Model):
     country = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=20, blank=True)
     profile_picture = models.ImageField(upload_to='profile_pics/', blank=True, null=True)
+    gst_number = models.CharField(max_length=15, blank=True, null=True)
+    gst_certificate = models.FileField(upload_to='gst_certificates/', blank=True, null=True)
 
     def __str__(self):
         return self.user.username
+
+
 
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -82,6 +86,14 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+class AuthenticityDocument(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='authenticity_documents')
+    document = models.FileField(upload_to='authenticity_documents/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Authenticity Document for {self.product.name}"
 
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, related_name='images', on_delete=models.CASCADE)

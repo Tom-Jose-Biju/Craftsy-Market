@@ -1,5 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
+from .views import artisan_documents
+
 
 from . import views
 
@@ -72,4 +74,6 @@ urlpatterns = [
     path('artisan/blog/write/', views.artisan_blog_write, name='artisan_blog_write'),
     path('artisan/blog/<int:blog_id>/', views.get_blog_details, name='get_blog_details'),
     path('delete-blog/<int:blog_id>/', views.delete_blog, name='delete_blog'),
+    path('artisan/documents/', artisan_documents, name='artisan_documents'),
+    path('virtual-try-on/<int:product_id>/', views.virtual_try_on, name='virtual_try_on'),
 ]

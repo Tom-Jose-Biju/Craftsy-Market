@@ -282,7 +282,9 @@
                     <button class="btn btn-add-to-wishlist btn-lg" onclick="addToWishlist()">
                         <i class="fas fa-heart me-2"></i>Add to Wishlist
                     </button>
-                    
+                    <button class="btn btn-secondary btn-lg" onclick="window.location.href='{% url 'virtual_try_on' product.id %}'">
+                        <i class="fas fa-camera me-2"></i>Virtual Try-On
+                    </button>
                     <div class="product-features mt-4">
                         <div class="row">
                             <div class="col-4 text-center">

@@ -30,6 +30,7 @@ from .models import OrderItem, Review
 from django.core.paginator import Paginator
 from .models import Blog
 from .forms import BlogForm
+from .models import AuthenticityDocument
 
 
 
@@ -989,3 +990,36 @@ def delete_blog(request, blog_id):
     blog = get_object_or_404(Blog, id=blog_id, author=request.user)
     blog.delete()
     return JsonResponse({'success': True, 'message': 'Blog deleted successfully!'})
+
+@login_required
+def artisan_documents(request):
+    artisan = get_object_or_404(Artisan, user=request.user)
+    products = Product.objects.filter(artisan=artisan)
+    authenticity_documents = AuthenticityDocument.objects.filter(product__artisan=artisan)
+
+    if request.method == 'POST':
+        if 'gst_number' in request.POST:
+            artisan.gst_number = request.POST['gst_number']
+            if 'gst_certificate' in request.FILES:
+                artisan.gst_certificate = request.FILES['gst_certificate']
+            artisan.save()
+            messages.success(request, 'GST information updated successfully.')
+        elif 'product' in request.POST and 'authenticity_document' in request.FILES:
+            product = get_object_or_404(Product, id=request.POST['product'], artisan=artisan)
+            AuthenticityDocument.objects.create(
+                product=product,
+                document=request.FILES['authenticity_document']
+            )
+            messages.success(request, 'Authenticity certificate uploaded successfully.')
+        return redirect('artisan_documents')
+
+    context = {
+        'artisan': artisan,
+        'products': products,
+        'authenticity_documents': authenticity_documents,
+    }
+    return render(request, 'artisan_documents.html', context)
+
+def virtual_try_on(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    return render(request, 'virtual_try_on.html', {'product': product})

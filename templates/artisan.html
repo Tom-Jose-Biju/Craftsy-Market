@@ -164,6 +164,9 @@
                             <a class="nav-link" href="{% url 'artisan_products' %}"><i class="fas fa-box me-2"></i>My Products</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="{% url 'artisan_documents' %}"><i class="fas fa-file-alt me-2"></i>Documents</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="{% url 'artisan_blog_write' %}"><i class="fas fa-pen me-2"></i>Write Blog</a>
                         </li>
                         <li class="nav-item">
@@ -262,25 +265,6 @@
                 </div>
             </div>
 
-            <!-- Recent Activity Section -->
-            <div class="row mt-4">
-                <div class="col-12">
-                    <div class="card info-section">
-                        <div class="card-body">
-                            <h5 class="card-title">Recent Activity</h5>
-                            <ul class="list-group list-group-flush">
-                                {% for activity in recent_activities %}
-                                    <li class="list-group-item">
-                                        <i class="fas fa-{{ activity.icon }} me-2"></i>
-                                        {{ activity.description }}
-                                        <small class="text-muted float-end">{{ activity.timestamp|timesince }} ago</small>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
         {% else %}
             <div class="alert alert-info fade-in" role="alert">
@@ -356,7 +340,7 @@
                 </div>
             </div>
         </div>
-
+    
         <!-- FAQ Section -->
         <div class="faq-section mt-5">
             <h3>Frequently Asked Questions</h3>
@@ -367,7 +351,7 @@
                 <li><strong>Can I edit my product listings?</strong> Yes, you can edit your listings at any time from your profile.</li>
             </ul>
         </div>
-
+<!-- Add this section to the dashboard -->
         <!-- New Static Elements -->
         <div class="row mt-5">
             <div class="col-md-6">
