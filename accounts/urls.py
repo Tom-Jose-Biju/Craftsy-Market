@@ -70,10 +70,12 @@ urlpatterns = [
     path('order-detail/<int:order_id>/', views.order_detail, name='order_detail'),
     path('submit-review/<int:order_item_id>/', views.submit_review, name='submit_review'),
 
+
     path('blogs/', views.customer_blog_view, name='customer_blog_view'),
     path('artisan/blog/write/', views.artisan_blog_write, name='artisan_blog_write'),
     path('artisan/blog/<int:blog_id>/', views.get_blog_details, name='get_blog_details'),
-    path('delete-blog/<int:blog_id>/', views.delete_blog, name='delete_blog'),
+    path('artisan/blog/<int:blog_id>/delete/', views.delete_blog, name='delete_blog'),
     path('artisan/documents/', artisan_documents, name='artisan_documents'),
     path('virtual-try-on/<int:product_id>/', views.virtual_try_on, name='virtual_try_on'),
+    path('single-product-checkout/<int:product_id>/', views.single_product_checkout, name='single_product_checkout'),
 ]

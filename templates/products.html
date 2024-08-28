@@ -207,6 +207,18 @@
                             </form>
                         </div>
                     </div>
+                    <div class="mb-4">
+                        <h4 class="sidebar-title"><i class="fas fa-filter me-2"></i>Filter by Price</h4>
+                        <form method="GET" action="{% url 'products' %}" class="flex items-center space-x-2">
+                            <input type="number" name="min_price" placeholder="Min Price" class="input input-bordered input-sm w-24" value="{{ request.GET.min_price }}">
+                            <span>to</span>
+                            <input type="number" name="max_price" placeholder="Max Price" class="input input-bordered input-sm w-24" value="{{ request.GET.max_price }}">
+                            <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                            {% if request.GET.min_price or request.GET.max_price %}
+                                <a href="{% url 'products' %}" class="btn btn-ghost btn-sm">Clear</a>
+                            {% endif %}
+                        </form>
+                    </div>
                     <h2 class="text-center mb-5"><i class="fas fa-gem me-2"></i>Handcrafted Treasures</h2>
                     <div class="row">
                         {% for product in products %}

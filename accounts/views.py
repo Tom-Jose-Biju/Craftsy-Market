@@ -187,6 +187,7 @@ def view_product(request, product_id):
         'category': product.category.name,
         'artisan': product.artisan.user.username,
         'created_at': product.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        'is_in_stock': product.is_in_stock(),
     })
 
 @login_required
@@ -359,38 +360,51 @@ def artisan_profile1(request):
 @login_required
 def add_product(request):
     if request.user.user_type != 'artisan':
-        messages.error(request, "Only artisans can add products.")
-        return redirect('home')
+        return JsonResponse({'success': False, 'message': "Only artisans can add products."})
     
-    categories = Category.objects.filter(is_active=True)  # Only active categories
+    categories = Category.objects.filter(is_active=True)
 
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES)
         if form.is_valid():
-            product = form.save(commit=False)
-            artisan = get_object_or_404(Artisan, user=request.user)
-            product.artisan = artisan
-            product.save()
+            try:
+                product = form.save(commit=False)
+                artisan = get_object_or_404(Artisan, user=request.user)
+                product.artisan = artisan
+                product.save()
 
-            images = request.FILES.getlist('images')
-            for i, image in enumerate(images):
-                ProductImage.objects.create(
-                    product=product,
-                    image=image,
-                    is_primary=(i == 0)
-                )
+                images = request.FILES.getlist('images')
+                if not images:
+                    raise ValueError("At least one image is required.")
 
-            messages.success(request, "Product added successfully!")
-            return redirect('artisan_products')
+                for i, image in enumerate(images):
+                    ProductImage.objects.create(
+                        product=product,
+                        image=image,
+                        is_primary=(i == 0)
+                    )
+
+                return JsonResponse({'success': True, 'message': "Product added successfully!"})
+            except Exception as e:
+                return JsonResponse({'success': False, 'message': str(e)})
+        else:
+            errors = {field: error[0] for field, error in form.errors.items()}
+            return JsonResponse({'success': False, 'errors': errors})
     else:
         form = ProductForm()
+
     return render(request, 'add_product.html', {'form': form, 'categories': categories})
+
+from django.db.models import Q
 
 def products(request):
     products = Product.objects.all()
     categories = Category.objects.filter(is_active=True)  # Only active categories
-
     search_query = request.GET.get('search')
+    category_id = request.GET.get('category')
+    min_price = request.GET.get('min_price')
+    max_price = request.GET.get('max_price')
+
     if search_query:
         products = products.filter(
             Q(name__icontains=search_query) |
@@ -398,11 +412,15 @@ def products(request):
             Q(artisan__user__username__icontains=search_query)
         )
 
-    category_id = request.GET.get('category')
     if category_id:
         products = products.filter(category_id=category_id)
 
-   
+    if min_price:
+        products = products.filter(price__gte=min_price)
+
+    if max_price:
+        products = products.filter(price__lte=max_price)
+
     for product in products:
         product.reviews_json = json.dumps(list(product.reviews.values('rating')), cls=DjangoJSONEncoder)
 
@@ -476,11 +494,17 @@ def product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id)
     reviews = product.reviews.all().order_by('-created_at')
     average_rating = reviews.aggregate(Avg('rating'))['rating__avg']
+
+    related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:3]
+
     
     context = {
         'product': product,
         'reviews': reviews,
         'average_rating': average_rating,
+        'in_stock': product.is_in_stock(),
+        'inventory_count': product.inventory,
+        'related_products': related_products,
     }
     return render(request, 'product_detail.html', context)
 
@@ -572,6 +596,7 @@ def checkout(request):
         }
         return render(request, 'checkout.html', context)
 
+
 @require_GET
 def payment_success(request):
     return render(request, 'payment_success.html')
@@ -617,6 +642,37 @@ def wishlist(request):
 
 @login_required
 @require_POST
+def single_product_checkout(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    if not product.is_in_stock():
+        return JsonResponse({'success': False, 'error': 'Product is out of stock'})
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'unit_amount': int(product.price * 100),
+                    'product_data': {
+                        'name': product.name,
+                        'description': product.description[:100],
+                    },
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=request.build_absolute_uri(reverse('payment_success')),
+            cancel_url=request.build_absolute_uri(reverse('payment_cancel')),
+        )
+        # Decrease inventory by 1
+        product.inventory -= 1
+        product.save()
+        return JsonResponse({'success': True, 'checkout_url': checkout_session.url})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@require_POST
 def add_to_cart(request):
     try:
         product_id = request.POST.get('product_id')
@@ -628,8 +684,13 @@ def add_to_cart(request):
         product = get_object_or_404(Product, id=product_id)
         
         cart, created = Cart.objects.get_or_create(user=request.user)
-        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
-        cart_item.quantity += quantity
+        cart_item, item_created = CartItem.objects.get_or_create(cart=cart, product=product)
+        
+        if item_created:
+            cart_item.quantity = quantity
+        else:
+            cart_item.quantity += quantity
+        
         cart_item.save()
         
         return JsonResponse({'success': True})
@@ -782,12 +843,18 @@ def payment_success(request):
     )
 
     for cart_item in cart_items:
-        OrderItem.objects.create(
-            order=order,
-            product=cart_item.product,
-            quantity=cart_item.quantity,
-            price=cart_item.product.price
-        )
+        if cart_item.product.inventory >= cart_item.quantity:
+            OrderItem.objects.create(
+                order=order,
+                product=cart_item.product,
+                quantity=cart_item.quantity,
+                price=cart_item.product.price
+            )
+            # Update inventory
+            cart_item.product.inventory -= cart_item.quantity
+            cart_item.product.save()
+        else:
+            messages.warning(request, f"{cart_item.product.name} is out of stock. It has been removed from your order.")
 
     # Clear the cart after successful payment
     cart_items.delete()
@@ -817,7 +884,13 @@ def order_history(request):
 @login_required
 def order_detail(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
-    return render(request, 'order_detail.html', {'order': order})
+    # Fetch the user's profile to get the address
+    profile = Profile.objects.get(user=request.user)
+    context = {
+        'order': order,
+        'profile': profile,
+    }
+    return render(request, 'order_detail.html', context)
 
 @login_required
 def write_review(request, order_item_id):
@@ -945,21 +1018,17 @@ def customer_blog_view(request):
     return render(request, 'customer_blog.html', {'blogs': blogs})
 
 @login_required
-@login_required
 def artisan_blog_write(request):
     if request.method == 'POST':
-        if 'blog_id' in request.POST:  # Edit or Delete operation
+        if 'blog_id' in request.POST:  # Edit operation
             blog_id = request.POST['blog_id']
             blog = get_object_or_404(Blog, id=blog_id, author=request.user)
-            
-            if 'title' in request.POST:  # Edit operation
-                form = BlogForm(request.POST, request.FILES, instance=blog)
-                if form.is_valid():
-                    form.save()
-                    messages.success(request, 'Blog post updated successfully!')
-            else:  # Delete operation
-                blog.delete()
-                messages.success(request, 'Blog post deleted successfully!')
+            form = BlogForm(request.POST, request.FILES, instance=blog)
+            if form.is_valid():
+                form.save()
+                return JsonResponse({'success': True})
+            else:
+                return JsonResponse({'success': False, 'error': form.errors})
         else:  # New blog post
             form = BlogForm(request.POST, request.FILES)
             if form.is_valid():
@@ -967,8 +1036,9 @@ def artisan_blog_write(request):
                 blog.author = request.user
                 blog.save()
                 messages.success(request, 'Blog post created successfully!')
-        
-        return redirect('artisan_blog_write')
+                return redirect('artisan_blog_write')
+            else:
+                messages.error(request, 'Error creating blog post. Please check the form.')
     else:
         form = BlogForm()
     
@@ -982,7 +1052,6 @@ def get_blog_details(request, blog_id):
         'title': blog.title,
         'content': blog.content,
     })
-    
 
 @login_required
 @require_POST

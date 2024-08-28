@@ -271,12 +271,19 @@
                     <p class="product-price">₹<span id="product-price">{{ product.price }}</span></p>
                     <p class="product-description">{{ product.description }}</p>
                     <p class="product-artisan"><i class="fas fa-user-circle me-2"></i>Crafted by: {{ product.artisan.user.username }}</p>
+                    <p class="product-inventory">
+                        {% if product.is_in_stock %}
+                            <span class="text-success">In stock: {{ product.inventory }} available</span>
+                        {% else %}
+                            <span class="text-danger">Out of stock</span>
+                        {% endif %}
+                    </p>
                     <div class="d-flex align-items-center mb-3">
                         <button class="btn btn-outline-secondary btn-sm" onclick="decrementQuantity()"><i class="fas fa-minus"></i></button>
-                        <input type="number" id="quantity" class="form-control quantity-input" value="1" min="1">
+                        <input type="number" id="quantity" class="form-control quantity-input" value="1" min="1" max="{{ product.inventory }}">
                         <button class="btn btn-outline-secondary btn-sm" onclick="incrementQuantity()"><i class="fas fa-plus"></i></button>
                     </div>
-                    <button class="btn btn-add-to-cart btn-lg me-2" onclick="addToCart()">
+                    <button class="btn btn-add-to-cart btn-lg me-2" onclick="addToCart()" {% if not product.is_in_stock %}disabled{% endif %}>
                         <i class="fas fa-shopping-cart me-2"></i>Add to Cart
                     </button>
                     <button class="btn btn-add-to-wishlist btn-lg" onclick="addToWishlist()">
@@ -285,6 +292,7 @@
                     <button class="btn btn-secondary btn-lg" onclick="window.location.href='{% url 'virtual_try_on' product.id %}'">
                         <i class="fas fa-camera me-2"></i>Virtual Try-On
                     </button>
+                </div>
                     <div class="product-features mt-4">
                         <div class="row">
                             <div class="col-4 text-center">
@@ -375,12 +383,31 @@
     <script>
         const basePrice = {{ product.price }};
         let cart = [];
-        let wishlist = []; // Add a wishlist array to track wishlist items
+        let wishlist = [];
 
         function updatePrice() {
             const quantity = parseInt($('#quantity').val());
             const newPrice = (basePrice * quantity).toFixed(2);
             $('#product-price').text(newPrice);
+        }
+
+        function incrementQuantity() {
+            const quantityInput = $('#quantity');
+            const currentQuantity = parseInt(quantityInput.val());
+            const maxQuantity = parseInt(quantityInput.attr('max'));
+            if (currentQuantity < maxQuantity) {
+                quantityInput.val(currentQuantity + 1);
+                updatePrice();
+            }
+        }
+
+        function decrementQuantity() {
+            const quantityInput = $('#quantity');
+            const currentQuantity = parseInt(quantityInput.val());
+            if (currentQuantity > 1) {
+                quantityInput.val(currentQuantity - 1);
+                updatePrice();
+            }
         }
 
         function checkProductInCart(productId) {
@@ -393,7 +420,7 @@
 
         function addToWishlist() {
             const productId = {{ product.id }};
-            if (!checkProductInWishlist(productId)) { // Check if already in wishlist
+            if (!checkProductInWishlist(productId)) {
                 wishlist.push({ id: productId, name: '{{ product.name }}', price: basePrice });
                 $.ajax({
                     url: "{% url 'add_to_wishlist' %}",
@@ -420,8 +447,13 @@
 
         function addToCart() {
             const productId = {{ product.id }};
-            const existingItem = checkProductInCart(productId);
-            const quantity = existingItem ? existingItem.quantity + 1 : 1; // Increase quantity if exists
+            const quantity = parseInt($('#quantity').val());
+            const availableInventory = {{ product.inventory }};
+
+            if (quantity > availableInventory) {
+                alert("Sorry, there's not enough inventory to fulfill your request.");
+                return;
+            }
 
             $.ajax({
                 url: "{% url 'add_to_cart' %}",
@@ -433,13 +465,9 @@
                 },
                 success: function(response) {
                     if (response.success) {
-                        if (existingItem) {
-                            existingItem.quantity = quantity; // Update quantity in cart
-                        } else {
-                            cart.push({ id: productId, name: '{{ product.name }}', price: basePrice, quantity: 1 });
-                        }
                         alert("Product added to cart successfully!");
                         updateCartDisplay();
+                        updateInventoryDisplay(response.new_inventory);
                     } else {
                         if (response.error === "AnonymousUser") {
                             alert("Please log in to add items to your cart.");
@@ -454,88 +482,114 @@
                 }
             });
         }
+
         function updateCartDisplay() {
-            const cartItems = $('#cartItems');
-            cartItems.empty();
-    
-            let total = 0;
-    
-            cart.forEach(item => {
-                const itemTotal = item.price * item.quantity;
-                total += itemTotal;
-    
-                cartItems.append(`
-                    <div class="cart-item">
-                        <div class="cart-item-details">
-                            <div>
-                                <div class="cart-item-name">${item.name}</div>
-                                <div class="cart-item-price">$${item.price.toFixed(2)} x ${item.quantity}</div>
+            $.ajax({
+                url: "{% url 'get_cart' %}",
+                method: "GET",
+                success: function(response) {
+                    const cartItems = $('#cartItems');
+                    cartItems.empty();
+                    let total = 0;
+
+                    response.cart_items.forEach(item => {
+                        const itemTotal = item.price * item.quantity;
+                        total += itemTotal;
+
+                        cartItems.append(`
+                            <div class="cart-item">
+                                <div class="cart-item-details">
+                                    <div>
+                                        <div class="cart-item-name">${item.name}</div>
+                                        <div class="cart-item-price">$${item.price.toFixed(2)} x ${item.quantity}</div>
+                                    </div>
+                                    <button class="btn-remove" onclick="removeFromCart(${item.id})">Remove</button>
+                                </div>
+                                <div class="cart-item-quantity">
+                                    <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity - 1})">-</button>
+                                    <span>${item.quantity}</span>
+                                    <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity + 1})">+</button>
+                                </div>
                             </div>
-                            <button class="btn-remove" onclick="removeFromCart(${item.id})">Remove</button>
-                        </div>
-                        <div class="cart-item-quantity">
-                            <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity - 1})">-</button>
-                            <span>${item.quantity}</span>
-                            <button onclick="updateCartItemQuantity(${item.id}, ${item.quantity + 1})">+</button>
-                        </div>
-                    </div>
-                `);
-            });
-    
-            $('#cartTotal').text(total.toFixed(2));
-            updateCartToggle();
-        }
-    
-        function updateCartItemQuantity(id, newQuantity) {
-            const item = cart.find(item => item.id === id);
-            if (item) {
-                if (newQuantity > 0) {
-                    item.quantity = newQuantity;
-                } else {
-                    removeFromCart(id);
+                        `);
+                    });
+
+                    $('#cartTotal').text(total.toFixed(2));
+                    updateCartToggle(response.total_items);
+                },
+                error: function() {
+                    alert("Error fetching cart data. Please try again.");
                 }
-                updateCartDisplay();
+            });
+        }
+
+        function updateCartItemQuantity(productId, newQuantity) {
+            if (productId && newQuantity >= 0) {
+                $.ajax({
+                    url: "{% url 'update_cart_quantity' %}",
+                    method: "POST",
+                    data: {
+                        product_id: productId,
+                        quantity: newQuantity,
+                        csrfmiddlewaretoken: "{{ csrf_token }}"
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            updateCartDisplay();
+                        } else {
+                            alert("Error updating cart. Please try again.");
+                        }
+                    },
+                    error: function() {
+                        alert("An unexpected error occurred. Please try again later.");
+                    }
+                });
+            } else {
+                console.error("Product ID is undefined or quantity is invalid");
             }
         }
-    
-        function removeFromCart(id) {
-            cart = cart.filter(item => item.id !== id);
-            updateCartDisplay();
+
+        function removeFromCart(productId) {
+            updateCartItemQuantity(productId, 0);
         }
-    
-        function updateCartToggle() {
-            const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+        function updateCartToggle(totalItems) {
             $('#cartToggle').html(`<i class="fas fa-shopping-cart"></i> <span class="badge bg-danger">${totalItems}</span>`);
         }
-    
+
+        function updateInventoryDisplay(newInventory) {
+            $('.product-inventory').html(`<span class="text-success">In stock: ${newInventory} available</span>`);
+            $('#quantity').attr('max', newInventory);
+            if (newInventory === 0) {
+                $('.btn-add-to-cart').prop('disabled', true);
+                $('.product-inventory').html('<span class="text-danger">Out of stock</span>');
+            }
+        }
+
         function checkout() {
-            const cartData = JSON.stringify(cart);
-            fetch("{% url 'checkout' %}", {
-                method: 'POST',
+            $.ajax({
+                url: "{% url 'checkout' %}",
+                method: "POST",
                 headers: {
                     'X-CSRFToken': '{{ csrf_token }}',
                     'Content-Type': 'application/json',
                 },
-                body: cartData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    window.location.href = data.checkout_url;
-                } else {
-                    alert("Error processing checkout. Please try again.");
+                success: function(response) {
+                    if (response.success) {
+                        window.location.href = response.checkout_url;
+                    } else {
+                        alert("Error processing checkout. Please try again.");
+                    }
+                },
+                error: function() {
+                    alert("An unexpected error occurred. Please try again later.");
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert("An unexpected error occurred. Please try again later.");
             });
         }
-    
+
         $(document).ready(function() {
             $('#quantity').on('input', updatePrice);
 
-            // Initialize Magnific Popup for image zoom
             $('.image-popup').magnificPopup({
                 type: 'image',
                 gallery: {
@@ -548,10 +602,9 @@
                 }
             });
 
-            // Add cart toggle button
             $('body').append('<button id="cartToggle" data-bs-toggle="modal" data-bs-target="#cartModal"><i class="fas fa-shopping-cart"></i> <span class="badge bg-danger">0</span></button>');
 
-            updateCartToggle();
+            updateCartDisplay();
 
             sessionStorage.setItem('currentPage', 'product_detail');
         });

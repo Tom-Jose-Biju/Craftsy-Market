@@ -17,6 +17,7 @@
     </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100">
+    <!-- Navbar -->
     <div class="navbar bg-base-300 text-base-content shadow-lg">
         <div class="flex-1">
             <a class="btn btn-ghost normal-case text-xl" href="{% url 'artisan_home' %}">Craftsy Artisan</a>
@@ -32,6 +33,7 @@
         </div>
     </div>
 
+    <!-- Hero Section -->
     <div class="hero bg-base-200 py-10">
         <div class="hero-content text-center">
             <div class="max-w-md">
@@ -41,8 +43,10 @@
         </div>
     </div>
 
+    <!-- Main Content -->
     <div class="container mx-auto mt-8 px-4">
         <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Write Blog Form -->
             <div class="lg:w-1/2">
                 <div class="card bg-base-300 shadow-xl">
                     <div class="card-body">
@@ -56,6 +60,7 @@
                         </form>
                     </div>
                 </div>
+                <!-- Writing Tips -->
                 <div class="mt-8">
                     <div class="card bg-base-300 shadow-xl">
                         <div class="card-body">
@@ -71,6 +76,7 @@
                     </div>
                 </div>
             </div>
+            <!-- Your Blogs -->
             <div class="lg:w-1/2">
                 <div class="card bg-base-300 shadow-xl">
                     <div class="card-body">
@@ -99,34 +105,13 @@
                         </div>
                     </div>
                 </div>
-                <div class="mt-8">
-                    <div class="stats shadow">
-                        <div class="stat">
-                            <div class="stat-figure text-primary">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
-                            </div>
-                            <div class="stat-title">Total Likes</div>
-                            <div class="stat-value text-primary">25.6K</div>
-                            <div class="stat-desc">21% more than last month</div>
-                        </div>
-                        
-                        <div class="stat">
-                            <div class="stat-figure text-secondary">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                            </div>
-                            <div class="stat-title">Page Views</div>
-                            <div class="stat-value text-secondary">2.6M</div>
-                            <div class="stat-desc">14% more than last month</div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
 
     <!-- Edit Blog Modal -->
     <dialog id="editBlogModal" class="modal">
-        <form method="dialog" class="modal-box">
+        <div class="modal-box">
             <h3 class="font-bold text-lg mb-4">Edit Blog</h3>
             <form id="editBlogForm" method="post">
                 {% csrf_token %}
@@ -148,44 +133,64 @@
                     <button type="submit" class="btn btn-primary" id="saveEditBlog">Save changes</button>
                 </div>
             </form>
-        </form>
+        </div>
     </dialog>
 
     <!-- Delete Blog Modal -->
     <dialog id="deleteBlogModal" class="modal">
-        <form method="dialog" class="modal-box">
+        <div class="modal-box">
             <h3 class="font-bold text-lg">Delete Blog</h3>
             <p class="py-4">Are you sure you want to delete this blog?</p>
             <div class="modal-action">
                 <button type="button" class="btn btn-ghost" onclick="deleteBlogModal.close()">Cancel</button>
                 <button type="button" class="btn btn-error" id="confirmDeleteBlog">Delete</button>
             </div>
-        </form>
+        </div>
     </dialog>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const editBlogModal = document.getElementById('editBlogModal');
+            const deleteBlogModal = document.getElementById('deleteBlogModal');
+
             // Edit Blog
             const editButtons = document.querySelectorAll('.edit-blog');
             editButtons.forEach(button => {
                 button.addEventListener('click', function() {
                     const blogId = this.getAttribute('data-blog-id');
-                    document.getElementById('editBlogId').value = blogId;
-                    // Fetch blog details and populate the form
                     fetch(`/artisan/blog/${blogId}/`)
                         .then(response => response.json())
                         .then(data => {
+                            document.getElementById('editBlogId').value = blogId;
                             document.getElementById('editBlogTitle').value = data.title;
                             document.getElementById('editBlogContent').value = data.content;
                             editBlogModal.showModal();
-                        });
+                        })
+                        .catch(error => console.error('Error:', error));
                 });
             });
-
-            document.getElementById('saveEditBlog').addEventListener('click', function() {
-                document.getElementById('editBlogForm').submit();
+        
+            document.getElementById('editBlogForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                fetch('{% url "artisan_blog_write" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error updating blog: ' + JSON.stringify(data.error));
+                    }
+                })
+                .catch(error => console.error('Error:', error));
             });
-
+    
             // Delete Blog
             const deleteButtons = document.querySelectorAll('.delete-blog');
             let blogIdToDelete;
@@ -195,24 +200,25 @@
                     deleteBlogModal.showModal();
                 });
             });
-
+    
             document.getElementById('confirmDeleteBlog').addEventListener('click', function() {
                 if (blogIdToDelete) {
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '{% url "artisan_blog_write" %}';
-                    const csrfInput = document.createElement('input');
-                    csrfInput.type = 'hidden';
-                    csrfInput.name = 'csrfmiddlewaretoken';
-                    csrfInput.value = '{{ csrf_token }}';
-                    form.appendChild(csrfInput);
-                    const blogIdInput = document.createElement('input');
-                    blogIdInput.type = 'hidden';
-                    blogIdInput.name = 'blog_id';
-                    blogIdInput.value = blogIdToDelete;
-                    form.appendChild(blogIdInput);
-                    document.body.appendChild(form);
-                    form.submit();
+                    fetch(`{% url "delete_blog" blog_id=0 %}`.replace('0', blogIdToDelete), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}',
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert('Error deleting blog: ' + data.message);
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
                 }
                 deleteBlogModal.close();
             });

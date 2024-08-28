@@ -86,6 +86,8 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+    def is_in_stock(self):
+        return self.inventory > 0
 
 class AuthenticityDocument(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='authenticity_documents')

@@ -29,6 +29,8 @@
             transform: scale(1.05);
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.3/dist/jquery.validate.min.js"></script>
 </head>
 
 <body class="min-h-screen">
@@ -55,37 +57,37 @@
             </figure>
             <div class="card-body lg:w-2/3">
                 <h2 class="card-title text-3xl mb-6">Add New Product</h2>
-                <form method="POST" enctype="multipart/form-data" class="space-y-4">
+                <form id="addProductForm" method="POST" enctype="multipart/form-data" class="space-y-4">
                     {% csrf_token %}
                     <div class="form-control">
                         <label for="product_name" class="label">
                             <span class="label-text">Product Name</span>
                         </label>
-                        <input type="text" name="name" id="product_name" placeholder="Enter product name" class="input input-bordered" required>
+                        <input type="text" name="name" id="product_name" placeholder="Enter product name" class="input input-bordered" required minlength="3" maxlength="100">
                     </div>
                     <div class="form-control">
                         <label for="product_description" class="label">
                             <span class="label-text">Description</span>
                         </label>
-                        <textarea name="description" id="product_description" placeholder="Enter product description" class="textarea textarea-bordered h-24" required></textarea>
+                        <textarea name="description" id="product_description" placeholder="Enter product description" class="textarea textarea-bordered h-24" required minlength="10" maxlength="1000"></textarea>
                     </div>
                     <div class="form-control">
                         <label for="product_price" class="label">
                             <span class="label-text">Price</span>
                         </label>
-                        <input type="number" name="price" id="product_price" placeholder="Enter product price" class="input input-bordered" required>
+                        <input type="number" name="price" id="product_price" placeholder="Enter product price" class="input input-bordered" required min="0.01" step="0.01">
                     </div>
                     <div class="form-control">
                         <label for="product_inventory" class="label">
                             <span class="label-text">Inventory</span>
                         </label>
-                        <input type="number" name="inventory" id="product_inventory" placeholder="Enter inventory count" class="input input-bordered" required>
+                        <input type="number" name="inventory" id="product_inventory" placeholder="Enter inventory count" class="input input-bordered" required min="0">
                     </div>
                     <div class="form-control">
                         <label for="product_images" class="label">
                             <span class="label-text">Images</span>
                         </label>
-                        <input type="file" name="images" id="product_images" class="file-input file-input-bordered w-full" multiple required>
+                        <input type="file" name="images" id="product_images" class="file-input file-input-bordered w-full" multiple required accept="image/*">
                     </div>
                     <div class="form-control">
                         <label for="category" class="label">
@@ -102,14 +104,102 @@
                         <button type="submit" class="btn btn-primary">Add Product</button>
                     </div>
                 </form>
+                <div id="formMessage" class="mt-4 text-center hidden"></div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script>
         $(document).ready(function() {
             sessionStorage.setItem('currentPage', 'add_product');
+
+            // Form validation
+            $("#addProductForm").validate({
+                rules: {
+                    name: {
+                        required: true,
+                        minlength: 3,
+                        maxlength: 100
+                    },
+                    description: {
+                        required: true,
+                        minlength: 10,
+                        maxlength: 1000
+                    },
+                    price: {
+                        required: true,
+                        number: true,
+                        min: 0.01
+                    },
+                    inventory: {
+                        required: true,
+                        number: true,
+                        min: 0
+                    },
+                    images: {
+                        required: true,
+                        accept: "image/*"
+                    },
+                    category: {
+                        required: true
+                    }
+                },
+                messages: {
+                    name: {
+                        required: "Please enter a product name",
+                        minlength: "Product name must be at least 3 characters long",
+                        maxlength: "Product name cannot exceed 100 characters"
+                    },
+                    description: {
+                        required: "Please enter a product description",
+                        minlength: "Description must be at least 10 characters long",
+                        maxlength: "Description cannot exceed 1000 characters"
+                    },
+                    price: {
+                        required: "Please enter a price",
+                        number: "Please enter a valid number",
+                        min: "Price must be greater than 0"
+                    },
+                    inventory: {
+                        required: "Please enter an inventory count",
+                        number: "Please enter a valid number",
+                        min: "Inventory must be 0 or greater"
+                    },
+                    images: {
+                        required: "Please select at least one image",
+                        accept: "Please select valid image files"
+                    },
+                    category: {
+                        required: "Please select a category"
+                    }
+                },
+                errorElement: 'span',
+                errorPlacement: function(error, element) {
+                    error.addClass('text-red-500 text-xs italic mt-1');
+                    error.insertAfter(element);
+                },
+                submitHandler: function(form) {
+                    var formData = new FormData(form);
+                    $.ajax({
+                        url: "{% url 'add_product' %}",
+                        type: "POST",
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function(response) {
+                            if (response.success) {
+                                $("#formMessage").removeClass("hidden bg-red-100 text-red-700").addClass("bg-green-100 text-green-700 p-3 rounded").text("Product added successfully!");
+                                form.reset();
+                            } else {
+                                $("#formMessage").removeClass("hidden bg-green-100 text-green-700").addClass("bg-red-100 text-red-700 p-3 rounded").text("Error: " + response.message);
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            $("#formMessage").removeClass("hidden bg-green-100 text-green-700").addClass("bg-red-100 text-red-700 p-3 rounded").text("An error occurred. Please try again.");
+                        }
+                    });
+                }
+            });
         });
     </script>
 </body>
