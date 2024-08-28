@@ -31,6 +31,14 @@ from django.core.paginator import Paginator
 from .models import Blog
 from .forms import BlogForm
 from .models import AuthenticityDocument
+from django.http import HttpResponse
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from io import BytesIO
+from django.db.models import Sum, Avg, Count
+from django.utils import timezone
 
 
 
@@ -866,6 +874,7 @@ def payment_cancel(request):
     messages.warning(request, "Payment cancelled. Your cart items are still saved.")
     return redirect('cart')
 
+
 @login_required
 def order_history(request):
     orders = Order.objects.filter(user=request.user).order_by('-created_at')
@@ -882,15 +891,54 @@ def order_history(request):
     return render(request, 'order_history.html', context)
 
 @login_required
+@login_required
 def order_detail(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
-    # Fetch the user's profile to get the address
     profile = Profile.objects.get(user=request.user)
+    
+    # Calculate the status progress
+    status_progress = {
+        'processing': 25,
+        'shipped': 75,
+        'delivered': 100
+    }.get(order.status, 0)
+    
+    # Fetch all reviews for each product in the order
+    for item in order.items.all():
+        item.reviews = Review.objects.filter(product=item.product).order_by('-created_at')
+    
     context = {
         'order': order,
         'profile': profile,
+        'status_progress': status_progress,
+        'user': request.user,
+        'can_simulate_delivery': order.status != 'delivered',
     }
     return render(request, 'order_detail.html', context)
+
+@login_required
+def update_order_status(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    if request.method == 'POST' and request.user.is_staff:
+        new_status = request.POST.get('status')
+        if new_status in dict(Order.STATUS_CHOICES):
+            order.status = new_status
+            order.save()
+            messages.success(request, f"Order status updated to {new_status}")
+        else:
+            messages.error(request, "Invalid status")
+    return redirect('order_detail', order_id=order.id)
+
+@login_required
+def add_tracking_number(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    if request.method == 'POST' and request.user.is_staff:
+        tracking_number = request.POST.get('tracking_number')
+        order.tracking_number = tracking_number
+        order.save()
+        messages.success(request, "Tracking number added successfully")
+    return redirect('order_detail', order_id=order.id)
+
 
 @login_required
 def write_review(request, order_item_id):
@@ -916,39 +964,36 @@ import logging
 logger = logging.getLogger(__name__)
 
 @login_required
+@login_required
+@require_POST
 def submit_review(request, order_item_id):
-    logger.info(f"Received request for order_item_id: {order_item_id}")
     order_item = get_object_or_404(OrderItem, id=order_item_id, order__user=request.user)
+    rating = request.POST.get('rating')
+    comment = request.POST.get('comment')
     
-    if request.method == 'POST':
-        logger.info("Processing POST request for review submission")
-        form = ReviewForm(request.POST)
-        if form.is_valid():
-            review = form.save(commit=False)
-            review.user = request.user
-            review.product = order_item.product
-            review.save()
-            logger.info("Review submitted successfully")
-            return JsonResponse({'success': True, 'message': 'Your review has been submitted successfully.'})
-        else:
-            logger.warning(f"Form validation failed: {form.errors}")
-            return JsonResponse({'success': False, 'errors': form.errors})
+    if rating and comment:
+        Review.objects.create(
+            user=request.user,
+            product=order_item.product,
+            rating=rating,
+            comment=comment
+        )
+        messages.success(request, 'Your review has been submitted successfully.')
     else:
-        logger.info("Rendering review form")
-        form = ReviewForm()
+        messages.error(request, 'Please provide both rating and comment.')
     
-    context = {
-        'form': form,
-        'order_item': order_item,
-    }
-    return render(request, 'review_modal.html', context)
+    return redirect('order_detail', order_id=order_item.order.id)
+    return redirect('order_detail', order_id=order_item.order.id)
 
 @login_required
 @require_POST
 def delete_review(request, review_id):
     review = get_object_or_404(Review, id=review_id, user=request.user)
+    order_id = review.product.orderitem_set.first().order.id
     review.delete()
-    return JsonResponse({'success': True, 'message': 'Review deleted successfully!'})
+    messages.success(request, 'Your review has been deleted successfully.')
+    return redirect('order_detail', order_id=order_id)
+
 
 @login_required
 def artisan_reviews(request):
@@ -1092,3 +1137,157 @@ def artisan_documents(request):
 def virtual_try_on(request, product_id):
     product = get_object_or_404(Product, id=product_id)
     return render(request, 'virtual_try_on.html', {'product': product})
+
+@login_required
+def download_product_report(request):
+
+    if not request.user.is_staff:
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
+    # Fetch product data
+    products = Product.objects.all().select_related('category', 'artisan__user')
+    total_products = products.count()
+    total_value = products.aggregate(Sum('price'))['price__sum'] or 0
+    average_price = products.aggregate(Avg('price'))['price__avg'] or 0
+
+    # Category analysis
+    categories = Category.objects.annotate(product_count=Count('products'))
+    
+    # Create a PDF buffer
+    buffer = BytesIO()
+    
+    # Create the PDF object
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+    
+    # Define styles
+    styles = getSampleStyleSheet()
+    title_style = styles['Heading1']
+    subtitle_style = styles['Heading2']
+    normal_style = styles['Normal']
+    
+    # Add title
+    elements.append(Paragraph("Product Analysis Report", title_style))
+    elements.append(Spacer(1, 12))
+    
+    # Add summary
+    elements.append(Paragraph("Summary", subtitle_style))
+    summary_data = [
+        ["Total Products", str(total_products)],
+        ["Total Value", f"${total_value:.2f}"],
+        ["Average Price", f"${average_price:.2f}"]
+    ]
+    summary_table = Table(summary_data)
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    elements.append(summary_table)
+    elements.append(Spacer(1, 12))
+    
+    # Add category analysis
+    elements.append(Paragraph("Category Analysis", subtitle_style))
+    category_data = [["Category", "Product Count"]]
+    for category in categories:
+        category_data.append([category.name, str(category.product_count)])
+    category_table = Table(category_data)
+    category_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    elements.append(category_table)
+    elements.append(Spacer(1, 12))
+    
+    # Add product list
+    elements.append(Paragraph("Product List", subtitle_style))
+    product_data = [["ID", "Name", "Category", "Price", "Inventory", "Artisan"]]
+    for product in products:
+        product_data.append([
+            str(product.id),
+            product.name,
+            product.category.name,
+            f"${product.price:.2f}",
+            str(product.inventory),
+            product.artisan.user.username
+        ])
+    product_table = Table(product_data)
+    product_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    elements.append(product_table)
+    
+    # Build the PDF
+    doc.build(elements)
+    
+    # Make sure you're returning an HttpResponse with the PDF content
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="product_report.pdf"'
+    return response
+
+@login_required
+def update_order_status(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    if request.method == 'POST':
+        new_status = request.POST.get('status')
+        if new_status in dict(Order.STATUS_CHOICES):
+            order.update_status(new_status)
+            messages.success(request, f"Order status updated to {new_status}")
+        else:
+            messages.error(request, "Invalid status")
+    return redirect('order_detail', order_id=order.id)
+
+@login_required
+def add_tracking_number(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    if request.method == 'POST':
+        tracking_number = request.POST.get('tracking_number')
+        order.tracking_number = tracking_number
+        order.save()
+        messages.success(request, "Tracking number added successfully")
+    return redirect('order_detail', order_id=order.id)
+
+@login_required
+def simulate_delivery(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    order.simulate_delivery()
+    messages.success(request, f"Order status updated to {order.get_status_display()}")
+    return redirect('order_detail', order_id=order.id)

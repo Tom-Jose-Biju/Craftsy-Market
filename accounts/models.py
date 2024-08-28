@@ -122,14 +122,28 @@ class Order(models.Model):
         ('shipped', 'Shipped'),
         ('delivered', 'Delivered'),
     )
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
-    created_at = models.DateTimeField(auto_now_add=True)
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='processing')
-    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    shipped_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    tracking_number = models.CharField(max_length=100, null=True, blank=True)
 
-    def __str__(self):
-        return f"Order {self.id} by {self.user.username}"
+    def update_status(self, new_status):
+        self.status = new_status
+        if new_status == 'shipped' and not self.shipped_at:
+            self.shipped_at = timezone.now()
+        elif new_status == 'delivered' and not self.delivered_at:
+            self.delivered_at = timezone.now()
+        self.save()
+    def simulate_delivery(self):
+        if self.status == 'processing':
+            self.update_status('shipped')
+        elif self.status == 'shipped':
+            self.update_status('delivered')
+        self.save()
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')

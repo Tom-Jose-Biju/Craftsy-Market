@@ -78,4 +78,11 @@ urlpatterns = [
     path('artisan/documents/', artisan_documents, name='artisan_documents'),
     path('virtual-try-on/<int:product_id>/', views.virtual_try_on, name='virtual_try_on'),
     path('single-product-checkout/<int:product_id>/', views.single_product_checkout, name='single_product_checkout'),
+    path('download-product-report/', views.download_product_report, name='download_product_report'),
+
+    path('order/<int:order_id>/update-status/', views.update_order_status, name='update_order_status'),
+    path('order/<int:order_id>/add-tracking/', views.add_tracking_number, name='add_tracking_number'),
+    path('order/<int:order_id>/simulate-delivery/', views.simulate_delivery, name='simulate_delivery'),
+    path('submit-review/<int:order_item_id>/', views.submit_review, name='submit_review'),
+    path('delete-review/<int:review_id>/', views.delete_review, name='delete_review'),
 ]

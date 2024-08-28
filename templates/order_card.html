@@ -1,36 +1,39 @@
 <div class="order-card">
     <div class="order-header">
-        <h5><i class="fas fa-shopping-cart me-2"></i>Order #{{ order.id }}</h5>
-        <span class="order-status status-{{ order.status|lower }}">
-            <i class="fas fa-{% if order.status == 'Processing' %}cog{% elif order.status == 'Shipped' %}shipping-fast{% else %}check-circle{% endif %} me-2"></i>
-            {{ order.get_status_display }}
-        </span>
+        <h5>Order #{{ order.id }}</h5>
+        <span class="order-status status-{{ order.status }}">{{ order.get_status_display }}</span>
     </div>
-    <div class="order-info">
-        <p><i class="far fa-calendar-alt me-2"></i>{{ order.created_at|date:"F d, Y" }}</p>
-        <p><i class="fas fa-tag me-2"></i>Total: ${{ order.total_price }}</p>
-    </div>
+    <p>Date: {{ order.created_at|date:"F d, Y" }}</p>
+    {% if order.tracking_number %}
+        <p>Tracking Number: {{ order.tracking_number }}</p>
+    {% endif %}
     <div class="order-items">
-        <h6><i class="fas fa-box-open me-2"></i>Items:</h6>
-        <ul class="list-unstyled">
-            {% for item in order.items.all %}
-                <li>
-                    <i class="fas fa-gift me-2"></i>
-                    {{ item.product.name }}
-                    <span class="badge bg-secondary ms-2">x{{ item.quantity }}</span>
-                    <span class="float-end">${{ item.price }}</span>
-                    {% if order.status == 'Delivered' %}
-                        {% if not item.review %}
-                            <button onclick="openReviewModal({{ item.id }})" class="btn btn-write-review">
-                                <i class="fas fa-star me-2"></i>Write a Review
-                            </button>
-                        {% endif %}
-                    {% endif %}
-                </li>
-            {% endfor %}
-        </ul>
+        {% for item in order.items.all %}
+            <div class="order-item">
+                <p>{{ item.product.name }} - Quantity: {{ item.quantity }}</p>
+            </div>
+        {% endfor %}
     </div>
-    <a href="{% url 'order_detail' order.id %}" class="btn btn-primary btn-sm mt-3">
-        <i class="fas fa-eye me-2"></i>View Details
-    </a>
+    <p class="order-total">Total: ${{ order.total_price }}</p>
+    <a href="{% url 'order_detail' order.id %}" class="btn btn-primary mt-2">View Details</a>
+    
+    {% if user.is_staff %}
+        <form action="{% url 'update_order_status' order.id %}" method="post" class="mt-3">
+            {% csrf_token %}
+            <select name="status" class="form-select">
+                {% for status, display in order.STATUS_CHOICES %}
+                    <option value="{{ status }}" {% if order.status == status %}selected{% endif %}>{{ display }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary mt-2">Update Status</button>
+        </form>
+        
+        {% if order.status == 'shipped' and not order.tracking_number %}
+            <form action="{% url 'add_tracking_number' order.id %}" method="post" class="mt-3">
+                {% csrf_token %}
+                <input type="text" name="tracking_number" placeholder="Enter tracking number" class="form-control">
+                <button type="submit" class="btn btn-primary mt-2">Add Tracking Number</button>
+            </form>
+        {% endif %}
+    {% endif %}
 </div>

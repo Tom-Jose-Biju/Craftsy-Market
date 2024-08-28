@@ -65,6 +65,16 @@
                     </div>
                 </div>
 
+                <!-- Product Analysis -->
+                <div class="card bg-base-100 shadow-xl mb-8">
+                    <div class="card-body">
+                        <h2 class="card-title mb-4">Product Analysis</h2>
+                        <button id="downloadReport" class="btn btn-primary">
+                            <i class="fas fa-download mr-2"></i>Download Product Report
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Product Table -->
                 <div class="card bg-base-100 shadow-xl">
                     <div class="card-body">
@@ -299,6 +309,10 @@
         chart.render();
 
         renderTable();
+
+        document.getElementById('downloadReport').addEventListener('click', function() {
+            window.location.href = "{% url 'download_product_report' %}";
+        });
     </script>
 </body>
 </html>
