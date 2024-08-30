@@ -90,10 +90,17 @@
                         <input type="file" name="images" id="product_images" class="file-input file-input-bordered w-full" multiple required accept="image/*">
                     </div>
                     <div class="form-control">
+                        <label for="image_preview" class="label">
+                            <span class="label-text">Image Preview</span>
+                        </label>
+                        <img id="image_preview" src="" alt="Image preview" class="hidden max-w-xs mx-auto mb-2">
+                        <p id="recognized_category" class="text-center text-sm italic"></p>
+                    </div>
+                    <div class="form-control">
                         <label for="category" class="label">
                             <span class="label-text">Category</span>
                         </label>
-                        <select name="category" id="category" class="select select-bordered" required>
+                        <select name="category" id="category" class="select select-bordered" required data-original-value="">
                             <option value="">Select a category</option>
                             {% for category in categories %}
                             <option value="{{ category.id }}">{{ category.name }}</option>
@@ -111,6 +118,32 @@
 
     <script>
         $(document).ready(function() {
+            // Get the CSRF token from the cookie
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+            const csrftoken = getCookie('csrftoken');
+
+            // Set up AJAX to always send CSRF token
+            $.ajaxSetup({
+                beforeSend: function(xhr, settings) {
+                    if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                        xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                    }
+                }
+            });
+
             sessionStorage.setItem('currentPage', 'add_product');
 
             // Form validation
@@ -198,6 +231,68 @@
                             $("#formMessage").removeClass("hidden bg-green-100 text-green-700").addClass("bg-red-100 text-red-700 p-3 rounded").text("An error occurred. Please try again.");
                         }
                     });
+                }
+            });
+
+            // Add a custom method for file accept if it doesn't exist
+            $.validator.addMethod("accept", function(value, element, param) {
+                return this.optional(element) || /^image\//i.test(element.files[0].type);
+            }, "Please select a valid image file.");
+
+            $('#product_images').on('change', function(event) {
+                var file = event.target.files[0];
+                if (file) {
+                    // Check if the file is a JPG
+                    if (!file.type.match('image/jpeg') && !file.type.match('image/jpg')) {
+                        $('#recognized_category').text('Error: Only JPG files are supported');
+                        return;
+                    }
+
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        $('#image_preview').attr('src', e.target.result).removeClass('hidden');
+                        
+                        // Send the image to the server for classification
+                        var formData = new FormData();
+                        formData.append('image', file);
+                        
+                        $.ajax({
+                            url: "{% url 'classify_image' %}",
+                            type: "POST",
+                            data: formData,
+                            processData: false,
+                            contentType: false,
+                            success: function(response) {
+                                if (response.success) {
+                                    $('#recognized_category').text('Recognized category: ' + response.category);
+                                    
+                                    // Update the category select field
+                                    var $categorySelect = $('#category');
+                                    if ($categorySelect.data('original-value') === '') {
+                                        $categorySelect.data('original-value', $categorySelect.val());
+                                    }
+                                    $categorySelect.val(response.category_id);
+                                } else {
+                                    $('#recognized_category').text('Could not recognize category: ' + response.message);
+                                    console.error('Error details:', response.message);
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                $('#recognized_category').text('Error classifying image: ' + error);
+                                console.error('Error details:', xhr.responseText);
+                            }
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        
+            // Add this to allow manual override of the category
+            $('#category').on('change', function() {
+                var $this = $(this);
+                var originalValue = $this.data('original-value');
+                if (originalValue !== '' && $this.val() !== originalValue) {
+                    $('#recognized_category').text('Category manually changed');
                 }
             });
         });

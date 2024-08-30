@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artisan Earnings - Craftsy</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@latest/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        body {
+            color: whitesmoke;
+        }
+        .card-title, .text-base-content {
+            color: white !important;
+        }
+        .table {
+            color: whitesmoke;
+        }
+        .table th {
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-base-300">
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'artisan_home' %}">Craftsy</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisanview' %}"><i class="fas fa-home me-2"></i>Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan_profile1' %}"><i class="fas fa-user me-2"></i>Profile</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'add_product' %}"><i class="fas fa-plus-circle me-2"></i>Add Product</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan_products' %}"><i class="fas fa-box me-2"></i>My Products</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan_documents' %}"><i class="fas fa-file-alt me-2"></i>Documents</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'artisan_blog_write' %}"><i class="fas fa-pen me-2"></i>Write Blog</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'logout' %}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5 pt-5">
+        <h1 class="text-3xl font-bold mb-4 text-white">Earnings Dashboard</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="card bg-base-200 shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title text-white">Total Earnings</h2>
+                    <p class="text-4xl font-bold text-white">${{ total_earnings|floatformat:2 }}</p>
+                    <p class="text-sm opacity-70 text-whitesmoke">Lifetime earnings</p>
+                </div>
+            </div>
+            <div class="card bg-base-200 shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title text-white">This Month</h2>
+                    <p class="text-4xl font-bold text-white">${{ monthly_earnings|floatformat:2 }}</p>
+                    <p class="text-sm opacity-70 text-whitesmoke">Earnings in the last 30 days</p>
+                </div>
+            </div>
+            <div class="card bg-base-200 shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title text-white">Average Order Value</h2>
+                    <p class="text-4xl font-bold text-white">${{ average_order_value|floatformat:2 }}</p>
+                    <p class="text-sm opacity-70 text-whitesmoke">Per completed order</p>
+                </div>
+            </div>
+            <div class="card bg-base-200 shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title text-white">Completed Orders</h2>
+                    <p class="text-4xl font-bold text-white">{{ completed_orders }}</p>
+                    <p class="text-sm opacity-70 text-whitesmoke">Total completed orders</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <div class="card bg-base-200 shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title mb-4 text-white">Monthly Earnings</h2>
+                    <canvas id="monthlyEarningsChart"></canvas>
+                </div>
+            </div>
+            <div class="card bg-base-200 shadow-xl">
+                <div class="card-body">
+                    <h2 class="card-title mb-4 text-white">Top Selling Products</h2>
+                    <canvas id="topProductsChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-base-200 shadow-xl mb-8">
+            <div class="card-body">
+                <h2 class="card-title mb-4 text-white">Recent Transactions</h2>
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-white">Order ID</th>
+                                <th class="text-white">Date</th>
+                                <th class="text-white">Product</th>
+                                <th class="text-white">Amount</th>
+                                <th class="text-white">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in recent_transactions %}
+                            <tr>
+                                <td>{{ transaction.order.id }}</td>
+                                <td>{{ transaction.order.created_at|date:"M d, Y" }}</td>
+                                <td>{{ transaction.product.name }}</td>
+                                <td>${{ transaction.price|floatformat:2 }}</td>
+                                <td>
+                                    <span class="badge badge-{{ transaction.order.status|lower }}">
+                                        {{ transaction.order.status|title }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Monthly Earnings Chart
+        var monthlyEarningsCtx = document.getElementById('monthlyEarningsChart').getContext('2d');
+        var monthlyEarningsChart = new Chart(monthlyEarningsCtx, {
+            type: 'line',
+            data: {
+                labels: {{ monthly_earnings_labels|safe }},
+                datasets: [{
+                    label: 'Monthly Earnings',
+                    data: {{ monthly_earnings_data }},
+                    borderColor: '#ff6b6b',
+                    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                    tension: 0.1,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value, index, values) {
+                                return '$' + value.toLocaleString();
+                            },
+                            color: 'whitesmoke'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: 'whitesmoke'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: 'whitesmoke'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Top Selling Products Chart
+        var topProductsCtx = document.getElementById('topProductsChart').getContext('2d');
+        var topProductsChart = new Chart(topProductsCtx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ top_products_labels|safe }},
+                datasets: [{
+                    label: 'Sales',
+                    data: {{ top_products_data }},
+                    backgroundColor: [
+                        '#ff6b6b',
+                        '#4ecdc4',
+                        '#45b7d1',
+                        '#f7b731',
+                        '#5f27cd'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: 'whitesmoke'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

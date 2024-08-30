@@ -1,6 +1,10 @@
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 from .views import artisan_documents
+from accounts.views import classify_image
+from django.views.decorators.csrf import ensure_csrf_cookie
+
+
 
 
 from . import views
@@ -85,4 +89,6 @@ urlpatterns = [
     path('order/<int:order_id>/simulate-delivery/', views.simulate_delivery, name='simulate_delivery'),
     path('submit-review/<int:order_item_id>/', views.submit_review, name='submit_review'),
     path('delete-review/<int:review_id>/', views.delete_review, name='delete_review'),
+    path('artisan/earnings/', views.artisan_earnings, name='artisan_earnings'),
+    path('classify-image/', ensure_csrf_cookie(classify_image), name='classify_image'),
 ]

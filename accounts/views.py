@@ -39,6 +39,11 @@ from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
 from django.db.models import Sum, Avg, Count
 from django.utils import timezone
+from django.db.models.functions import TruncMonth
+from django.core.files.uploadedfile import InMemoryUploadedFile
+from django.views.decorators.csrf import ensure_csrf_cookie
+
+
 
 
 
@@ -519,19 +524,28 @@ def product_detail(request, product_id):
 @login_required
 def artisan_order_details(request):
     artisan = get_object_or_404(Artisan, user=request.user)
-    orders = Order.objects.filter(items__product__artisan=artisan).distinct().order_by('-created_at')
+    orders = Order.objects.filter(items__product__artisan=artisan).distinct()
 
-    # Pagination
+    # Calculate total price for each order
+    for order in orders:
+        order.total_price = sum(item.price * item.quantity for item in order.items.all())
+        order.save()
+
+    total_orders = orders.count()
+    pending_orders = orders.filter(status='processing').count()
+    completed_orders = orders.filter(status='delivered').count()
+    total_revenue = sum(order.total_price for order in orders.filter(status='delivered'))
+
     paginator = Paginator(orders, 10)  # Show 10 orders per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     context = {
         'orders': page_obj,
-        'total_orders': orders.count(),
-        'pending_orders': orders.filter(status='Processing').count(),
-        'completed_orders': orders.filter(status='Delivered').count(),
-        'total_revenue': orders.filter(status='Delivered').aggregate(Sum('total_price'))['total_price__sum'] or 0,
+        'total_orders': total_orders,
+        'pending_orders': pending_orders,
+        'completed_orders': completed_orders,
+        'total_revenue': total_revenue,
     }
     return render(request, 'artisan_order_details.html', context)
 
@@ -1039,6 +1053,41 @@ def artisan_dashboard(request):
     }
     return render(request, 'artisan.html', context)
 
+@login_required
+def artisan_earnings(request):
+    artisan = request.user.artisan
+    completed_orders = Order.objects.filter(items__product__artisan=artisan, status='delivered').distinct()
+    
+    total_earnings = completed_orders.aggregate(Sum('total_price'))['total_price__sum'] or 0
+    monthly_earnings = completed_orders.filter(created_at__gte=timezone.now() - timezone.timedelta(days=30)).aggregate(Sum('total_price'))['total_price__sum'] or 0
+    average_order_value = total_earnings / completed_orders.count() if completed_orders.count() > 0 else 0
+    
+    # Monthly earnings data for chart
+    monthly_earnings_data = list(completed_orders.annotate(month=TruncMonth('created_at')).values('month').annotate(earnings=Sum('total_price')).order_by('month'))
+    monthly_earnings_labels = [entry['month'].strftime("%B %Y") for entry in monthly_earnings_data]
+    monthly_earnings_values = [float(entry['earnings']) for entry in monthly_earnings_data]
+    
+    # Top selling products data for chart
+    top_products = Product.objects.filter(artisan=artisan).annotate(sales_count=Count('orderitem')).order_by('-sales_count')[:5]
+    top_products_labels = [product.name for product in top_products]
+    top_products_data = [product.sales_count for product in top_products]
+    
+    # Recent transactions
+    recent_transactions = OrderItem.objects.filter(product__artisan=artisan, order__status='delivered').order_by('-order__created_at')[:10]
+    
+    context = {
+        'total_earnings': total_earnings,
+        'monthly_earnings': monthly_earnings,
+        'average_order_value': average_order_value,
+        'completed_orders': completed_orders.count(),
+        'monthly_earnings_labels': json.dumps(monthly_earnings_labels),
+        'monthly_earnings_data': monthly_earnings_values,
+        'top_products_labels': json.dumps(top_products_labels),
+        'top_products_data': top_products_data,
+        'recent_transactions': recent_transactions,
+    }
+    
+    return render(request, 'artisan_earnings.html', context)
 
 @receiver(post_save, sender=User)
 def create_user_cart(sender, instance, created, **kwargs):
@@ -1291,3 +1340,37 @@ def simulate_delivery(request, order_id):
     order.simulate_delivery()
     messages.success(request, f"Order status updated to {order.get_status_display()}")
     return redirect('order_detail', order_id=order.id)
+
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+@ensure_csrf_cookie
+@login_required
+def classify_image(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Only POST requests are allowed'})
+
+    if 'image' not in request.FILES:
+        return JsonResponse({'success': False, 'message': 'No image file provided'})
+
+    image_file = request.FILES['image']
+    
+    # Check if the file is a JPG
+    if not image_file.content_type in ['image/jpeg', 'image/jpg']:
+        return JsonResponse({'success': False, 'message': 'Only JPG files are supported'})
+
+    try:
+        temp_product = Product()
+        category_name = temp_product.classify_image(image_file)
+        category, _ = Category.objects.get_or_create(name=category_name)
+        
+        return JsonResponse({
+            'success': True,
+            'category': category.name,
+            'category_id': category.id
+        })
+    except Exception as e:
+        logger.error(f"Error classifying image: {str(e)}", exc_info=True)
+        return JsonResponse({'success': False, 'message': f"Error classifying image: {str(e)}"})

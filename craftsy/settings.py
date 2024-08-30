@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 import os
 from pathlib import Path
+import tensorflow as tf
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -162,3 +163,9 @@ EMAIL_HOST_USER = 'tomjosebiju@gmai.com'
 EMAIL_HOST_PASSWORD = 'Kozhmannil2002'
 
 LOGIN_REDIRECT_URL = 'home'
+
+# TensorFlow settings
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
+# Increase the maximum upload size (adjust as needed)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB

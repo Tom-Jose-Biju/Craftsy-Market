@@ -2,7 +2,14 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
-
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
+from tensorflow.keras.applications.efficientnet import EfficientNetB0, preprocess_input, decode_predictions
+from tensorflow.keras.preprocessing import image
+import numpy as np
+import tensorflow as tf
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+import io
 
 class User(AbstractUser):
     USER_TYPE_CHOICES = (
@@ -48,8 +55,6 @@ class Artisan(models.Model):
     def __str__(self):
         return self.user.username
 
-
-
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
@@ -57,13 +62,11 @@ class Category(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)  # Add this line
 
-
     def __str__(self):
         return self.name
 
     class Meta:
         verbose_name_plural = "Categories"
-
 
 class Product(models.Model):
     CATEGORY_CHOICES = [
@@ -71,8 +74,6 @@ class Product(models.Model):
         ('pottery', 'Pottery'),
         ('woodworking', 'Woodworking'),
         ('painting', 'Painting'),
-
-
     ]
 
     name = models.CharField(max_length=200)
@@ -86,8 +87,59 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
     def is_in_stock(self):
         return self.inventory > 0
+
+    def classify_image(self, image_file):
+        print("Loading EfficientNet model...")
+        model = EfficientNetB0(weights='imagenet', include_top=True)
+        print("Model loaded successfully")
+
+        print(f"Image file type: {type(image_file)}")
+        
+        if isinstance(image_file, (InMemoryUploadedFile, TemporaryUploadedFile)):
+            print("Processing UploadedFile")
+            img = image.load_img(io.BytesIO(image_file.read()), target_size=(224, 224))
+        else:
+            print("Processing file path")
+            img = image.load_img(image_file, target_size=(224, 224))
+        
+        print("Image loaded successfully")
+        x = image.img_to_array(img)
+        x = np.expand_dims(x, axis=0)
+        x = preprocess_input(x)
+
+        print("Making prediction...")
+        preds = model.predict(x)
+        print("Prediction made successfully")
+        predicted_class = decode_predictions(preds, top=5)[0]
+        print(f"Predicted classes: {predicted_class}")
+
+        category_name = self.map_prediction_to_category(predicted_class)
+        return category_name
+
+    @staticmethod
+    def map_prediction_to_category(predictions):
+        # Define mappings from ImageNet classes to your categories
+        category_mappings = {
+            'jewelry': ['necklace', 'earring', 'ring', 'bangle', 'pendant'],
+            'pottery': ['vase', 'pot', 'ceramic', 'earthenware', 'porcelain'],
+            'woodworking': ['wooden_spoon', 'chair', 'table', 'cabinet', 'wooden'],
+            'painting': ['paintbrush', 'canvas', 'acrylic_paint', 'oil_paint', 'watercolor'],
+        }
+
+        # Check each prediction against the mappings
+        for pred in predictions:
+            predicted_class = pred[1]
+            print(f"Checking predicted class: {predicted_class}")
+            for category, related_classes in category_mappings.items():
+                if any(cls in predicted_class for cls in related_classes):
+                    print(f"Matched category: {category}")
+                    return category
+
+        print("No category match found, returning 'other'")
+        return 'other'  # Default category if no match is found
 
 class AuthenticityDocument(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='authenticity_documents')
@@ -102,6 +154,14 @@ class ProductImage(models.Model):
     image = models.ImageField(upload_to='product_images/')
     is_primary = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @receiver(post_save, sender='accounts.ProductImage')
+    def classify_product_image(sender, instance, created, **kwargs):
+        if created and instance.is_primary:
+            category_name = instance.product.classify_image(instance.image)
+            category, _ = Category.objects.get_or_create(name=category_name)
+            instance.product.category = category
+            instance.product.save()
 
     def __str__(self):
         return f"Image for {self.product.name}"
@@ -130,6 +190,7 @@ class Order(models.Model):
     shipped_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     tracking_number = models.CharField(max_length=100, null=True, blank=True)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     def update_status(self, new_status):
         self.status = new_status
@@ -153,7 +214,6 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name} in Order {self.order.id}"
-
 
 class Cart(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
