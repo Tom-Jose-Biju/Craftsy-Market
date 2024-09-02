@@ -160,7 +160,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in order.items.all %}
+                    {% for item in order_items %}
                     <tr>
                         <td>{{ item.product.name }}</td>
                         <td>{{ item.quantity }}</td>
@@ -180,6 +180,8 @@
                                             </form>
                                         {% endif %}
                                     </div>
+                                {% empty %}
+                                    <p>No reviews yet.</p>
                                 {% endfor %}
 
                                 <h5>Write a Review</h5>

@@ -51,6 +51,9 @@
             background-color: #ff8c8c;
             border-color: #ff8c8c;
         }
+        .w-full{
+            color: white;
+        }
     </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
@@ -99,31 +102,43 @@
             <div class="lg:w-2/3">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {% for blog in blogs %}
-                        <div class="card bg-base-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-                            {% if blog.image %}
-                                <figure><img src="{{ blog.image.url }}" alt="{{ blog.title }}" class="w-full h-48 object-cover" /></figure>
-                            {% else %}
-                                <figure><img src="https://via.placeholder.com/300x200" alt="Placeholder" class="w-full h-48 object-cover" /></figure>
-                            {% endif %}
-                            <div class="card-body">
-                                <h2 class="card-title text-white">{{ blog.title }}</h2>
-                                <p class="text-white">{{ blog.content|truncatewords:20 }}</p>
-                                <div class="card-actions justify-between items-center mt-4">
-                                    <p class="text-sm text-e0e0e0">By {{ blog.author.username }} on {{ blog.created_at|date:"F d, Y" }}</p>
-                                    <button class="btn btn-primary btn-sm" onclick="readMore('{{ blog.id }}')">Read More</button>
-                                </div>
-                            </div>
-                        </div>
-                    {% empty %}
-                        <div class="col-span-2">
-                            <div class="alert alert-info shadow-lg">
-                                <div>
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current flex-shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                    <span class="text-e0e0e0">No blogs available at the moment. Check back later for exciting artisan stories!</span>
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
+    <div class="card bg-base-300 shadow-xl hover:shadow-2xl transition-shadow duration-300 blog-card" data-blog-id="{{ blog.id }}">
+        {% if blog.image %}
+            <figure><img src="{{ blog.image.url }}" alt="{{ blog.title }}" class="w-full h-48 object-cover" /></figure>
+        {% else %}
+            <figure><img src="https://via.placeholder.com/300x200" alt="Placeholder" class="w-full h-48 object-cover" /></figure>
+        {% endif %}
+        <div class="card-body">
+            <h2 class="card-title text-white">{{ blog.title }}</h2>
+            <p class="text-white">{{ blog.content|truncatewords:20 }}</p>
+            <div class="flex items-center mt-2">
+                <button class="btn btn-sm btn-outline mr-2 like-btn" data-blog-id="{{ blog.id }}">
+                    <i class="fas fa-heart mr-1"></i> <span class="likes-count">{{ blog.likes.count }}</span>
+                </button>
+                <span class="text-sm"><i class="fas fa-comment mr-1"></i> <span class="comments-count">{{ blog.comments.count }}</span> Comments</span>
+            </div>
+            <div id="comments-{{ blog.id }}" class="mt-4 space-y-2"></div>
+            <form class="comment-form mt-4" data-blog-id="{{ blog.id }}">
+                {% csrf_token %}
+                <textarea class="textarea textarea-bordered w-full" placeholder="Add a comment..." rows="2"></textarea>
+                <button type="submit" class="btn btn-primary btn-sm mt-2">Post Comment</button>
+            </form>
+            <div class="card-actions justify-between items-center mt-4">
+                <p class="text-sm text-e0e0e0">By {{ blog.author.username }} on {{ blog.created_at|date:"F d, Y" }}</p>
+                <button class="btn btn-primary btn-sm" onclick="readMore('{{ blog.id }}')">Read More</button>
+            </div>
+        </div>
+    </div>
+{% empty %}
+    <div class="col-span-2">
+        <div class="alert alert-info shadow-lg">
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current flex-shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="text-e0e0e0">No blogs available at the moment. Check back later for exciting artisan stories!</span>
+            </div>
+        </div>
+    </div>
+{% endfor %}
                 </div>
             </div>
             <div class="lg:w-1/3">
@@ -225,6 +240,124 @@
             console.log(`Read more for blog ${blogId}`);
             // You can redirect to a detailed blog page or show a modal with full content
         }
+    
+        // Like functionality
+        document.querySelectorAll('.like-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const blogId = this.getAttribute('data-blog-id');
+                fetch(`/blog/${blogId}/like/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const likesCount = this.querySelector('.likes-count');
+                    likesCount.textContent = data.likes_count;
+                    this.classList.toggle('btn-active', data.liked);
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        });
+    
+        // Load comments function
+        function loadComments(blogId) {
+            fetch(`/blog/${blogId}/comments/`)
+                .then(response => response.json())
+                .then(data => {
+                    const commentsContainer = document.querySelector(`#comments-${blogId}`);
+                    commentsContainer.innerHTML = '';
+                    data.comments.forEach(comment => {
+                        const commentElement = document.createElement('div');
+                        commentElement.className = 'comment mb-2 p-2 bg-base-200 rounded';
+                        commentElement.innerHTML = `
+                            <p class="font-semibold">${comment.user}</p>
+                            <p>${comment.content}</p>
+                            <p class="text-sm text-gray-500">${comment.created_at}</p>
+                            <button class="btn btn-error btn-sm delete-btn" data-comment-id="${comment.id}">Delete</button>
+                        `;
+                        commentsContainer.appendChild(commentElement);
+                    });
+
+                    // Add event listeners to delete buttons
+                    document.querySelectorAll('.delete-btn').forEach(button => {
+                        button.addEventListener('click', function() {
+                            const commentId = this.getAttribute('data-comment-id');
+                            deleteComment(commentId, blogId);
+                        });
+                    });
+                })
+                .catch(error => console.error('Error loading comments:', error));
+        }
+    
+        // Delete comment function
+        function deleteComment(commentId, blogId) {
+            fetch(`/blog/comment/${commentId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadComments(blogId);
+                    const commentsCount = document.querySelector(`.blog-card[data-blog-id="${blogId}"] .comments-count`);
+                    commentsCount.textContent = parseInt(commentsCount.textContent) - 1;
+                } else {
+                    alert('Error deleting comment: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    
+        // Submit comment
+        document.querySelectorAll('.comment-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const blogId = this.getAttribute('data-blog-id');
+                const content = this.querySelector('textarea').value.trim();
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                
+                if (!content) {
+                    alert('Comment content is required.');
+                    return;
+                }
+                
+                fetch(`/blog/${blogId}/comment/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: content })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        this.querySelector('textarea').value = '';
+                        loadComments(blogId);
+                        const commentsCount = document.querySelector(`.blog-card[data-blog-id="${blogId}"] .comments-count`);
+                        commentsCount.textContent = parseInt(commentsCount.textContent) + 1;
+                    } else {
+                        alert('Error adding comment: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while posting the comment.');
+                });
+            });
+        });
+    
+        // Load comments for all blog posts
+        document.querySelectorAll('.blog-card').forEach(card => {
+            const blogId = card.dataset.blogId;
+            loadComments(blogId);
+        });
     </script>
 </body>
 </html>

@@ -88,6 +88,10 @@
                                         <h3 class="card-title">{{ blog.title }}</h3>
                                         <p>{{ blog.content|truncatewords:20 }}</p>
                                         <p class="text-sm opacity-70">Published on {{ blog.created_at|date:"F d, Y" }}</p>
+                                        <div class="flex items-center mt-2">
+                                            <span class="mr-2"><i class="fas fa-heart"></i> {{ blog.likes.count }} Likes</span>
+                                            <span><i class="fas fa-comment"></i> {{ blog.comments.count }} Comments</span>
+                                        </div>
                                         <div class="card-actions justify-end mt-2">
                                             <button class="btn btn-sm btn-outline btn-primary edit-blog" data-blog-id="{{ blog.id }}">Edit</button>
                                             <button class="btn btn-sm btn-outline btn-error delete-blog" data-blog-id="{{ blog.id }}">Delete</button>
@@ -106,8 +110,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
 
     <!-- Edit Blog Modal -->
     <dialog id="editBlogModal" class="modal">

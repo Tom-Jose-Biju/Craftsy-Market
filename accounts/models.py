@@ -121,17 +121,55 @@ class Product(models.Model):
 
     @staticmethod
     def map_prediction_to_category(predictions):
-        # Define mappings from ImageNet classes to your categories
+        # Define expanded mappings from ImageNet classes to your categories
         category_mappings = {
-            'jewelry': ['necklace', 'earring', 'ring', 'bangle', 'pendant'],
-            'pottery': ['vase', 'pot', 'ceramic', 'earthenware', 'porcelain'],
-            'woodworking': ['wooden_spoon', 'chair', 'table', 'cabinet', 'wooden'],
-            'painting': ['paintbrush', 'canvas', 'acrylic_paint', 'oil_paint', 'watercolor'],
+            'jewelry': [
+                'necklace', 'earring', 'ring', 'bangle', 'pendant', 'bracelet', 'anklet',
+                'brooch', 'tiara', 'cufflink', 'locket', 'charm', 'gemstone', 'pearl',
+                'gold', 'silver', 'platinum', 'diamond', 'ruby', 'sapphire', 'emerald'
+            ],
+            'pottery': [
+                'vase', 'pot', 'ceramic', 'earthenware', 'porcelain', 'bowl', 'plate',
+                'mug', 'teapot', 'jug', 'urn', 'planter', 'tile', 'figurine', 'sculpture',
+                'clay', 'terracotta', 'stoneware', 'raku', 'glaze', 'kiln'
+            ],
+            'woodworking': [
+                'wooden_spoon', 'chair', 'table', 'cabinet', 'wooden', 'bookshelf',
+                'cutting_board', 'bowl', 'box', 'frame', 'carving', 'sculpture',
+                'furniture', 'desk', 'bench', 'chest', 'dresser', 'stool', 'hardwood',
+                'softwood', 'plywood', 'veneer', 'lathe', 'chisel', 'saw'
+            ],
+            'painting': [
+                'paintbrush', 'canvas', 'acrylic_paint', 'oil_paint', 'watercolor',
+                'palette', 'easel', 'art', 'artwork', 'portrait', 'landscape', 'still_life',
+                'abstract', 'mural', 'fresco', 'gouache', 'tempera', 'pastel', 'charcoal',
+                'sketch', 'drawing', 'illustration', 'pigment', 'brushstroke'
+            ],
+            'textiles': [
+                'fabric', 'textile', 'quilt', 'embroidery', 'knitting', 'crochet', 'weaving',
+                'tapestry', 'rug', 'carpet', 'blanket', 'pillow', 'cushion', 'needlework',
+                'sewing', 'loom', 'yarn', 'thread', 'silk', 'wool', 'cotton', 'linen'
+            ],
+            'glasswork': [
+                'glass', 'stained_glass', 'blown_glass', 'vase', 'bowl', 'sculpture',
+                'window', 'lampwork', 'bead', 'mosaic', 'fused_glass', 'goblet', 'decanter',
+                'paperweight', 'chandelier', 'mirror', 'prism', 'crystal'
+            ],
+            'metalwork': [
+                'metal', 'sculpture', 'forging', 'welding', 'blacksmith', 'ironwork',
+                'copperwork', 'brasswork', 'silversmith', 'goldsmith', 'armor', 'sword',
+                'knife', 'tool', 'ornament', 'weathervane', 'gate', 'railing'
+            ],
+            'candles': [
+                'candle', 'wax', 'wick', 'taper', 'pillar', 'votive', 'tea_light',
+                'scented', 'beeswax', 'soy_wax', 'paraffin', 'candlestick', 'candleholder',
+                'flame', 'melted', 'aromatherapy', 'fragrance', 'essential_oil', 'mold'
+            ]
         }
 
         # Check each prediction against the mappings
         for pred in predictions:
-            predicted_class = pred[1]
+            predicted_class = pred[1].lower()
             print(f"Checking predicted class: {predicted_class}")
             for category, related_classes in category_mappings.items():
                 if any(cls in predicted_class for cls in related_classes):
@@ -232,6 +270,16 @@ class Blog(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     image = models.ImageField(upload_to='blog_images/', blank=True, null=True)
+    likes = models.ManyToManyField(User, related_name='liked_blogs', blank=True)
 
     def __str__(self):
         return self.title
+
+class Comment(models.Model):
+    blog = models.ForeignKey(Blog, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Comment by {self.user.username} on {self.blog.title}"

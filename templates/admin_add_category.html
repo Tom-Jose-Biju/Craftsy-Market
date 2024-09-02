@@ -189,6 +189,32 @@
                 });
             }
         }
+
+        // Add this function to handle form submission
+        document.getElementById('deleteForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = e.target;
+            const url = form.action;
+            const csrfToken = form.querySelector('input[name="csrfmiddlewaretoken"]').value;
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams(new FormData(form))
+            }).then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Failed to delete category');
+                }
+            }).catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the category');
+            });
+        });
     </script>
 </body>
 </html>
