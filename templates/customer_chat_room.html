@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Chat Room - Craftsy</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.1.0/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        #chat-messages {
+            height: 400px;
+            overflow-y: auto;
+        }
+        .chat-message {
+            padding: 8px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .chat-message.sent {
+            background-color: #4a5568;
+            margin-left: 20%;
+        }
+        .chat-message.received {
+            background-color: #2d3748;
+            margin-right: 20%;
+        }
+    </style>
+</head>
+<body class="bg-base-300 text-base-content">
+    <div class="container mx-auto p-4">
+        <h1 class="text-3xl font-bold mb-4">Customer Chat Room: {{ room_name }}</h1>
+        <div id="chat-messages" class="bg-base-200 p-4 rounded-lg mb-4">
+            <!-- Messages will be loaded here -->
+        </div>
+        <div class="flex mb-2">
+            <input type="text" id="chat-message-input" class="input input-bordered flex-grow mr-2" placeholder="Type your message...">
+            <button id="chat-message-submit" class="btn btn-primary mr-2">Send</button>
+            <button id="clear-chat" class="btn btn-secondary">Clear Chat</button>
+        </div>
+    </div>
+
+    <script>
+        const roomName = "{{ room_name }}";
+        const username = "{{ request.user.username }}";
+        let lastMessageId = 0;
+
+        function loadMessages() {
+            $.ajax({
+                url: '/chat/get_messages/' + roomName + '/',
+                method: 'GET',
+                data: { 'last_id': lastMessageId },
+                success: function(data) {
+                    data.messages.forEach(function(message) {
+                        if (message.id > lastMessageId) {
+                            addMessage(message.username, message.message, message.timestamp, message.user_type);
+                            lastMessageId = message.id;
+                        }
+                    });
+                },
+                error: function() {
+                    console.error("Failed to load messages.");
+                },
+                complete: function() {
+                    setTimeout(loadMessages, 1000); // Poll every second
+                }
+            });
+        }
+
+        function addMessage(username, message, timestamp, userType) {
+            const messageElement = $('<div class="chat-message"></div>');
+            messageElement.addClass(userType === "customer" ? "sent" : "received");
+            messageElement.html('<strong>' + username + ':</strong> ' + message + 
+                                '<small class="text-gray-500 ml-2">' + formatTimestamp(timestamp) + '</small>');
+            $('#chat-messages').append(messageElement);
+            $('#chat-messages').scrollTop($('#chat-messages')[0].scrollHeight);
+        }
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function sendMessage() {
+            const message = $('#chat-message-input').val();
+            if (message) {
+                $.ajax({
+                    url: '/chat/send_message/' + roomName + '/',
+                    method: 'POST',
+                    data: {
+                        'message': message,
+                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                    },
+                    success: function(data) {
+                        $('#chat-message-input').val('');
+                        addMessage(username, message, new Date().toISOString(), 'customer');
+                    },
+                    error: function() {
+                        console.error("Failed to send message. Please try again.");
+                    }
+                });
+            }
+        }
+
+        function clearChat() {
+            $.ajax({
+                url: '/chat/clear_chat/' + roomName + '/',
+                method: 'POST',
+                data: {
+                    'csrfmiddlewaretoken': '{{ csrf_token }}'
+                },
+                success: function() {
+                    $('#chat-messages').empty();
+                    lastMessageId = 0;
+                },
+                error: function() {
+                    console.error("Failed to clear chat. Please try again.");
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            loadMessages();
+
+            $('#chat-message-submit').click(sendMessage);
+            $('#clear-chat').click(clearChat);
+
+            $('#chat-message-input').keyup(function(e) {
+                if (e.keyCode === 13) {
+                    sendMessage();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

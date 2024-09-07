@@ -92,6 +92,49 @@
             from { opacity: 0; }
             to { opacity: 1; }
         }
+        .sidebar {
+            background-color: #1a1a1a;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .sidebar h4 {
+            color: #ff6b6b;
+            margin-bottom: 15px;
+        }
+        .sidebar ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .sidebar li {
+            margin-bottom: 10px;
+        }
+        .sidebar a {
+            color: #e0e0e0;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        .sidebar a:hover {
+            color: #ff9ff3;
+        }
+        .sidebar .badge {
+            background-color: #ff6b6b;
+            color: #fff;
+        }
+        .product-card.inactive {
+            opacity: 0.6;
+        }
+        .product-card.inactive::after {
+            content: "Disabled";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 2rem;
+            color: #dc3545;
+            font-weight: bold;
+            text-transform: uppercase;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -153,74 +196,119 @@
     </div>
 
     <div class="container mt-5">
-        <div class="product-container fade-in">
-            {% if products %}
-                <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-                    {% for product in products %}
-                        <div class="col">
-                            <div class="product-card">
-                                <div class="product-image">
-                                    {% if product.images.first %}
-                                        <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}">
-                                    {% else %}
-                                        <img src="https://via.placeholder.com/300x200?text=No+Image" alt="Default Product Image">
-                                    {% endif %}
-                                </div>
-                                <div class="product-details">
-                                    <h5 class="product-title">{{ product.name }}</h5>
-                                    <p class="product-description">{{ product.description|truncatewords:15 }}</p>
-                                    <p class="product-price">${{ product.price }}</p>
-                                    <p class="product-info">
-                                        <small>Category: {{ product.category.name }}</small>
-                                        <small>Inventory: 
-                                            {% if product.inventory == 0 %}
-                                                <span class="text-danger">Out of Stock</span>
-                                            {% elif product.inventory <= 5 %}
-                                                <span class="text-warning">Low Stock ({{ product.inventory }})</span>
-                                            {% else %}
-                                                {{ product.inventory }}
-                                            {% endif %}
-                                        </small>
-                                    </p>
-                                    <a href="{% url 'update_product' product.id %}" class="btn btn-update btn-sm">Update Product</a>
-                                    <form method="POST" action="{% url 'delete_product' product.id %}" style="display: inline;">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-delete btn-sm" onclick="return confirm('Are you sure you want to delete this product?')">Delete Product</button>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 mb-4">
+                <div class="sidebar">
+                    <h4>Categories</h4>
+                    <ul>
+                        <li>
+                            <a href="{% url 'artisan_products' %}" {% if not selected_category %}class="fw-bold"{% endif %}>
+                                All Products <span class="badge rounded-pill">{{ products.count }}</span>
+                            </a>
+                        </li>
+                        {% for category in categories %}
+                            <li>
+                                <a href="{% url 'artisan_products' %}?category={{ category.id }}" {% if selected_category == category.id|stringformat:"s" %}class="fw-bold"{% endif %}>
+                                    {{ category.name }} <span class="badge rounded-pill">{{ category.product_count }}</span>
+                                </a>
+                            </li>
+                        {% empty %}
+                            <li>No categories found</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
 
-                        <!-- Modal for deleting product -->
-                        <div class="modal fade" id="deleteModal{{ product.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ product.id }}" aria-hidden="true">
-                            <div class="modal-dialog">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title" id="deleteModalLabel{{ product.id }}">Delete Product: {{ product.name }}</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <!-- Main Content -->
+            <div class="col-md-9">
+                <!-- Top Selling Products Section -->
+                <div class="mb-5">
+                    <h3 class="mb-4">Top Selling Products</h3>
+                    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+                        {% for product in top_selling_products %}
+                            <div class="col">
+                                <div class="product-card">
+                                    <div class="product-image">
+                                        {% if product.images.first %}
+                                            <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}">
+                                        {% else %}
+                                            <img src="https://via.placeholder.com/300x200?text=No+Image" alt="Default Product Image">
+                                        {% endif %}
                                     </div>
-                                    <div class="modal-body">
-                                        <p>Are you sure you want to delete this product?</p>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                        <form method="POST" action="{% url 'delete_product' product.id %}">
-                                            {% csrf_token %}
-                                            <button type="submit" class="btn btn-danger">Delete</button>
-                                        </form>
+                                    <div class="product-details">
+                                        <h5 class="product-title">{{ product.name }}</h5>
+                                        <p class="product-price">${{ product.price }}</p>
+                                        <p class="product-info">
+                                            <small>Sales: {{ product.sales_count }}</small>
+                                        </p>
                                     </div>
                                 </div>
                             </div>
+                        {% empty %}
+                            <div class="col-12">
+                                <p>No sales data available yet.</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- All Products Section -->
+                <h3 class="mb-4">All Products</h3>
+                <div class="product-container fade-in">
+                    {% if products %}
+                        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+                            {% for product in products %}
+                                <div class="col">
+                                    <div class="product-card {% if not product.is_active %}inactive{% endif %}">
+                                        <div class="product-image">
+                                            {% if product.images.first %}
+                                                <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}">
+                                            {% else %}
+                                                <img src="https://via.placeholder.com/300x200?text=No+Image" alt="Default Product Image">
+                                            {% endif %}
+                                        </div>
+                                        <div class="product-details">
+                                            <h5 class="product-title">{{ product.name }}</h5>
+                                            <p class="product-description">{{ product.description|truncatewords:15 }}</p>
+                                            <p class="product-price">${{ product.price }}</p>
+                                            <p class="product-info">
+                                                <small>Category: {{ product.category.name }}</small>
+                                                <small>Inventory: 
+                                                    {% if product.inventory == 0 %}
+                                                        <span class="text-danger">Out of Stock</span>
+                                                    {% elif product.inventory <= 5 %}
+                                                        <span class="text-warning">Low Stock ({{ product.inventory }})</span>
+                                                    {% else %}
+                                                        {{ product.inventory }}
+                                                    {% endif %}
+                                                </small>
+                                            </p>
+                                            <a href="{% url 'update_product' product.id %}" class="btn btn-update btn-sm">Update Product</a>
+                                            <form method="POST" action="{% url 'toggle_product_status' product.id %}" class="d-inline">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-sm {% if product.is_active %}btn-warning{% else %}btn-success{% endif %}">
+                                                    {% if product.is_active %}
+                                                        <i class="fas fa-ban me-2"></i>Disable
+                                                    {% else %}
+                                                        <i class="fas fa-check me-2"></i>Enable
+                                                    {% endif %}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
                         </div>
-                    {% endfor %}
+                    {% else %}
+                        <div class="text-center mt-5">
+                            <h3>No products found in this category.</h3>
+                            <p>Add some products or choose a different category.</p>
+                            <a href="{% url 'add_product' %}" class="btn btn-primary mt-3"><i class="fas fa-plus-circle me-2"></i>Add New Product</a>
+                        </div>
+                    {% endif %}
                 </div>
-            {% else %}
-                <div class="text-center mt-5">
-                    <h3>You haven't added any products yet.</h3>
-                    <p>Start showcasing your handcrafted creations!</p>
-                    <a href="{% url 'add_product' %}" class="btn btn-primary mt-3"><i class="fas fa-plus-circle me-2"></i>Add Your First Product</a>
-                </div>
-            {% endif %}
+            </div>
         </div>
     </div>
 

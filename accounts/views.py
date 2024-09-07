@@ -33,11 +33,11 @@ from .forms import BlogForm
 from .models import AuthenticityDocument
 from django.http import HttpResponse
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
-from django.db.models import Sum, Avg, Count
+from django.db.models import Sum, Avg, Count, F
 from django.utils import timezone
 from django.db.models.functions import TruncMonth
 from django.core.files.uploadedfile import InMemoryUploadedFile
@@ -46,6 +46,16 @@ from .models import Comment
 from datetime import datetime
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+from .models import ChatMessage
+from django.views.decorators.csrf import csrf_exempt
+import os
+import tensorflow as tf
+from datetime import timedelta
+import base64
+import matplotlib.pyplot as plt
+from django.http import FileResponse
+from .models import AuthenticityDocument
+
 
 
 
@@ -422,7 +432,7 @@ def add_product(request):
 from django.db.models import Q
 
 def products(request):
-    products = Product.objects.all()
+    products = Product.objects.filter(is_active=True)
     categories = Category.objects.filter(is_active=True)  # Only active categories
     search_query = request.GET.get('search')
     category_id = request.GET.get('category')
@@ -440,10 +450,20 @@ def products(request):
         products = products.filter(category_id=category_id)
 
     if min_price:
-        products = products.filter(price__gte=min_price)
+        try:
+            min_price = float(min_price)
+            if min_price >= 0:
+                products = products.filter(price__gte=min_price)
+        except ValueError:
+            pass
 
     if max_price:
-        products = products.filter(price__lte=max_price)
+        try:
+            max_price = float(max_price)
+            if max_price >= 0:
+                products = products.filter(price__lte=max_price)
+        except ValueError:
+            pass
 
     for product in products:
         product.reviews_json = json.dumps(list(product.reviews.values('rating')), cls=DjangoJSONEncoder)
@@ -457,6 +477,31 @@ def products(request):
     return render(request, 'products.html', context)
 
 @login_required
+def get_artisan_info(request, artisan_id):
+    artisan = get_object_or_404(Artisan, id=artisan_id)
+    product_count = Product.objects.filter(artisan=artisan, is_active=True).count()
+    average_rating = Review.objects.filter(product__artisan=artisan).aggregate(Avg('rating'))['rating__avg'] or 0
+
+    data = {
+        'name': artisan.user.username,
+        'image_url': artisan.profile_picture.url if artisan.profile_picture else '/path/to/default/image.jpg',
+        'bio': artisan.bio or 'No bio available',
+        'product_count': product_count,
+        'average_rating': average_rating,
+    }
+    return JsonResponse(data)
+    
+def artisan_products_view(request, artisan_id):
+    artisan = get_object_or_404(Artisan, id=artisan_id)
+    products = Product.objects.filter(artisan=artisan, is_active=True)
+    context = {
+        'artisan': artisan,
+        'products': products,
+    }
+    return render(request, 'artisan_products.html', context)
+    
+@login_required
+@login_required
 def artisan_products(request):
     if request.user.user_type != 'artisan':
         messages.error(request, "You don't have access to this page.")
@@ -464,7 +509,29 @@ def artisan_products(request):
     
     artisan = get_object_or_404(Artisan, user=request.user)
     products = Product.objects.filter(artisan=artisan)
-    return render(request, 'artisan_products.html', {'products': products})
+    
+    # Get categories with product count
+    categories = Category.objects.annotate(
+        product_count=Count('products', filter=Q(products__artisan=artisan))
+    ).filter(product_count__gt=0)
+    
+    # Filter products by category if a category is selected
+    selected_category = request.GET.get('category')
+    if selected_category:
+        products = products.filter(category__id=selected_category)
+    
+    # Get top selling products
+    top_selling_products = Product.objects.filter(artisan=artisan, is_active=True).annotate(
+        sales_count=Count('orderitem')
+    ).order_by('-sales_count')[:3]  # Change 3 to the number of top products you want to display
+    
+    context = {
+        'products': products,
+        'categories': categories,
+        'selected_category': selected_category,
+        'top_selling_products': top_selling_products,
+    }
+    return render(request, 'artisan_products.html', context)
 
 @login_required
 def update_product(request, product_id):
@@ -493,19 +560,35 @@ def update_product(request, product_id):
 
 @login_required
 @require_POST
-def delete_product(request, product_id):
+def toggle_product_status(request, product_id):
     if request.user.user_type != 'artisan':
         messages.error(request, "You don't have access to this page.")
         return redirect('home')
     
-    # Get the Artisan instance
     artisan = get_object_or_404(Artisan, user=request.user)
-    
-    # Now query the Product using the Artisan instance
     product = get_object_or_404(Product, id=product_id, artisan=artisan)
     
-    product.delete()
-    messages.success(request, "Product deleted successfully!")
+    product.is_active = not product.is_active
+    product.save()
+    
+    status = "enabled" if product.is_active else "disabled"
+    messages.success(request, f"Product '{product.name}' has been {status}.")
+    return redirect('artisan_products')
+
+@login_required
+@require_POST
+def disable_product(request, product_id):
+    if request.user.user_type != 'artisan':
+        messages.error(request, "You don't have access to this page.")
+        return redirect('home')
+    
+    artisan = get_object_or_404(Artisan, user=request.user)
+    product = get_object_or_404(Product, id=product_id, artisan=artisan)
+    
+    product.is_active = False
+    product.save()
+    
+    messages.success(request, f"Product '{product.name}' has been disabled.")
     return redirect('artisan_products')
 
 from django.db.models import Avg
@@ -520,7 +603,7 @@ def product_detail(request, product_id):
     average_rating = reviews.aggregate(Avg('rating'))['rating__avg']
 
     related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:3]
-
+    has_authenticity_certificate = AuthenticityDocument.objects.filter(product=product).exists()
     
     context = {
         'product': product,
@@ -529,6 +612,7 @@ def product_detail(request, product_id):
         'in_stock': product.is_in_stock(),
         'inventory_count': product.inventory,
         'related_products': related_products,
+        'has_authenticity_certificate': has_authenticity_certificate,
     }
     return render(request, 'product_detail.html', context)
 
@@ -1255,141 +1339,133 @@ def download_product_report(request):
         messages.error(request, "You don't have access to this page.")
         return redirect('home')
     
-    # Fetch product data
+    # Fetch data
     products = Product.objects.all().select_related('category', 'artisan__user')
     total_products = products.count()
     total_value = products.aggregate(Sum('price'))['price__sum'] or 0
     average_price = products.aggregate(Avg('price'))['price__avg'] or 0
 
-    # Category analysis
     categories = Category.objects.annotate(product_count=Count('products'))
     
+    # Monthly data
+    monthly_data = Product.objects.annotate(month=TruncMonth('created_at')).values('month').annotate(
+        new_products=Count('id'),
+        total_value=Sum('price')
+    ).order_by('month')
+
     # Create a PDF buffer
     buffer = BytesIO()
     
     # Create the PDF object
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
     elements = []
     
-    # Define styles
+    # Styles
     styles = getSampleStyleSheet()
-    title_style = styles['Heading1']
-    subtitle_style = styles['Heading2']
+    title_style = ParagraphStyle('Title', fontSize=24, alignment=1, spaceAfter=0.3*inch)
+    heading_style = ParagraphStyle('Heading', fontSize=18, alignment=0, spaceAfter=0.2*inch, spaceBefore=0.3*inch)
+    subheading_style = ParagraphStyle('Subheading', fontSize=14, alignment=0, spaceAfter=0.1*inch, spaceBefore=0.2*inch)
     normal_style = styles['Normal']
-    header_style = ParagraphStyle(
-        'HeaderStyle',
-        parent=styles['Normal'],
-        fontSize=18,
-        leading=22,
-        textColor=colors.HexColor('#333333'),
-        spaceAfter=12,
-        alignment=1  # Center alignment
-    )
-    table_header_style = ParagraphStyle(
-        'TableHeaderStyle',
-        parent=styles['Normal'],
-        fontSize=12,
-        leading=14,
-        textColor=colors.black ,
-        alignment=1  # Center alignment
-    )
-    table_cell_style = ParagraphStyle(
-        'TableCellStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        leading=12,
-        textColor=colors.black,
-        alignment=1  # Center alignment
-    )
     
-
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph("Craftsy Product Report", header_style))
-    elements.append(Paragraph(f"Date: {datetime.now().strftime('%B %d, %Y')}", normal_style))
-    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#4CAF50')))
-    elements.append(Spacer(1, 12))
+    # Title
+    elements.append(Paragraph("Comprehensive Product Report", title_style))
+    elements.append(Paragraph(f"Generated on: {timezone.now().strftime('%B %d, %Y')}", normal_style))
+    elements.append(Spacer(1, 0.25*inch))
     
-    # Add summary
-    elements.append(Paragraph("Summary", subtitle_style))
+    # Overall Summary
+    elements.append(Paragraph("Overall Summary", heading_style))
     summary_data = [
-        [Paragraph("Total Products", table_header_style), Paragraph(str(total_products), table_cell_style)],
-        [Paragraph("Total Value", table_header_style), Paragraph(f"${total_value:.2f}", table_cell_style)],
-        [Paragraph("Average Price", table_header_style), Paragraph(f"${average_price:.2f}", table_cell_style)]
+        ["Total Products", str(total_products)],
+        ["Total Value", f"${total_value:.2f}"],
+        ["Average Price", f"${average_price:.2f}"],
     ]
-    summary_table = Table(summary_data, colWidths=[150, 150])
+    summary_table = Table(summary_data, colWidths=[2*inch, 2*inch])
     summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 14),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(summary_table)
-    elements.append(Spacer(1, 12))
     
-    # Add category analysis
-    elements.append(Paragraph("Category Analysis", subtitle_style))
-    category_data = [[Paragraph("Category", table_header_style), Paragraph("Product Count", table_header_style)]]
+    # Category Distribution
+    elements.append(Paragraph("Category Distribution", heading_style))
+    category_data = [["Category", "Product Count", "Percentage"]]
     for category in categories:
-        category_data.append([Paragraph(category.name, table_cell_style), Paragraph(str(category.product_count), table_cell_style)])
-    category_table = Table(category_data, colWidths=[150, 150])
+        percentage = (category.product_count / total_products) * 100
+        category_data.append([category.name, str(category.product_count), f"{percentage:.2f}%"])
+    category_table = Table(category_data, colWidths=[2*inch, 1.5*inch, 1.5*inch])
     category_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2196F3')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(category_table)
-    elements.append(Spacer(1, 12))
     
-    # Add product list
-    elements.append(Paragraph("Product List", subtitle_style))
-    product_data = [
-        [Paragraph("ID", table_header_style), Paragraph("Name", table_header_style), Paragraph("Category", table_header_style), Paragraph("Price", table_header_style), Paragraph("Inventory", table_header_style), Paragraph("Artisan", table_header_style)]
-    ]
-    for product in products:
-        product_data.append([
-            Paragraph(str(product.id), table_cell_style),
-            Paragraph(product.name, table_cell_style),
-            Paragraph(product.category.name, table_cell_style),
-            Paragraph(f"${product.price:.2f}", table_cell_style),
-            Paragraph(str(product.inventory), table_cell_style),
-            Paragraph(product.artisan.user.username, table_cell_style)
+    # Category Pie Chart
+    plt.figure(figsize=(8, 6))
+    plt.pie([c.product_count for c in categories], labels=[c.name for c in categories], autopct='%1.1f%%')
+    plt.title("Product Distribution by Category")
+    img_buffer = BytesIO()
+    plt.savefig(img_buffer, format='png')
+    img_buffer.seek(0)
+    img = Image(img_buffer)
+    img.drawHeight = 4*inch
+    img.drawWidth = 6*inch
+    elements.append(img)
+    
+    # Monthly Report
+    elements.append(Paragraph("Monthly Report", heading_style))
+    monthly_table_data = [["Month", "New Products", "Total Value"]]
+    for entry in monthly_data:
+        monthly_table_data.append([
+            entry['month'].strftime("%B %Y"),
+            str(entry['new_products']),
+            f"${entry['total_value']:.2f}"
         ])
-    product_table = Table(product_data, colWidths=[50, 100, 100, 75, 75, 100])
-    product_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FF9800')),
+    monthly_table = Table(monthly_table_data, colWidths=[2*inch, 2*inch, 2*inch])
+    monthly_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    elements.append(monthly_table)
+    
+    # Detailed Product List
+    elements.append(Paragraph("Detailed Product List", heading_style))
+    product_data = [["ID", "Name", "Category", "Price", "Inventory", "Artisan", "Created At"]]
+    for product in products:
+        product_data.append([
+            str(product.id),
+            product.name,
+            product.category.name,
+            f"${product.price:.2f}",
+            str(product.inventory),
+            product.artisan.user.username,
+            product.created_at.strftime("%Y-%m-%d")
+        ])
+    product_table = Table(product_data, colWidths=[0.5*inch, 2*inch, 1.5*inch, 1*inch, 1*inch, 1.5*inch, 1.5*inch])
+    product_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(product_table)
@@ -1397,10 +1473,10 @@ def download_product_report(request):
     # Build the PDF
     doc.build(elements)
     
-    # Make sure you're returning an HttpResponse with the PDF content
+    # FileResponse sets the Content-Disposition header so that browsers
+    # present the option to save the file.
     buffer.seek(0)
-    response = HttpResponse(buffer, content_type='application/pdf')
-    response['Content-Disposition'] = 'attachment; filename="product_report.pdf"'
+    return FileResponse(buffer, as_attachment=True, filename='product_report.pdf')
     return response
 
 @login_required
@@ -1440,47 +1516,68 @@ logger = logging.getLogger(__name__)
 @ensure_csrf_cookie
 @login_required
 def classify_image(request):
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Only POST requests are allowed'})
+    if request.method == 'POST' and request.FILES.get('image'):
+        image_file = request.FILES['image']
+        try:
+            from PIL import Image
+            import numpy as np
 
-    if 'image' not in request.FILES:
-        return JsonResponse({'success': False, 'message': 'No image file provided'})
+            # Load the custom trained model
+            model_path = os.path.join(settings.BASE_DIR, 'custom_efficientnet_model.h5')
+            if not os.path.exists(model_path):
+                return JsonResponse({'success': False, 'message': 'Model file not found. Please train the model first.'})
+            
+            model = tf.keras.models.load_model(model_path)
 
-    image_file = request.FILES['image']
-    
-    # Check if the file is a JPG
-    if not image_file.content_type in ['image/jpeg', 'image/jpg']:
-        return JsonResponse({'success': False, 'message': 'Only JPG files are supported'})
+            # Process the image
+            img = Image.open(image_file).convert('RGB')
+            img = img.resize((224, 224))  # Resize to match the input size used during training
+            img_array = np.array(img)
+            img_array = np.expand_dims(img_array, 0)
+            img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
 
-    try:
-        temp_product = Product()
-        category_name = temp_product.classify_image(image_file)
-        category, _ = Category.objects.get_or_create(name=category_name)
-        
-        return JsonResponse({
-            'success': True,
-            'category': category.name,
-            'category_id': category.id
-        })
-    except Exception as e:
-        logger.error(f"Error classifying image: {str(e)}", exc_info=True)
-        return JsonResponse({'success': False, 'message': f"Error classifying image: {str(e)}"})
+            # Make prediction
+            predictions = model.predict(img_array)
+            predicted_class_index = tf.argmax(predictions[0]).numpy()
+
+            # Get category name and ID
+            categories = dict(Product.CATEGORY_CHOICES)
+            category_name = list(categories.values())[predicted_class_index]
+            category_id = list(categories.keys())[predicted_class_index]
+
+            # Get confidence score
+            confidence = float(predictions[0][predicted_class_index])
+
+            return JsonResponse({
+                'success': True, 
+                'category': category_name, 
+                'category_id': category_id,
+                'confidence': confidence
+            })
+        except ImportError as e:
+            return JsonResponse({'success': False, 'message': f"Error importing required modules: {str(e)}"})
+        except (IOError, OSError) as e:
+            return JsonResponse({'success': False, 'message': f"Error processing image: {str(e)}"})
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': f"Unexpected error: {str(e)}"})
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
 
 @login_required
 def download_earnings_report(request):
     artisan = request.user.artisan
-    completed_orders = Order.objects.filter(items__product__artisan=artisan, status='delivered').distinct()
     
-    # Fetch earnings data
-    total_earnings = completed_orders.aggregate(Sum('total_price'))['total_price__sum'] or 0
-    monthly_earnings = completed_orders.filter(created_at__gte=timezone.now() - timezone.timedelta(days=30)).aggregate(Sum('total_price'))['total_price__sum'] or 0
-    average_order_value = total_earnings / completed_orders.count() if completed_orders.count() > 0 else 0
+    # Date range for the report (last 12 months)
+    end_date = timezone.now().date()
+    start_date = end_date - timedelta(days=365)
     
-    # Monthly earnings data for chart
-    monthly_earnings_data = list(completed_orders.annotate(month=TruncMonth('created_at')).values('month').annotate(earnings=Sum('total_price')).order_by('month'))
+    # Fetch data
+    completed_orders = Order.objects.filter(
+        items__product__artisan=artisan, 
+        status='delivered',
+        created_at__range=[start_date, end_date]
+    ).distinct()
     
-    # Top selling products data
-    top_products = Product.objects.filter(artisan=artisan).annotate(sales_count=Count('orderitem')).order_by('-sales_count')[:5]
+    products = Product.objects.filter(artisan=artisan)
     
     # Create a PDF buffer
     buffer = BytesIO()
@@ -1489,107 +1586,130 @@ def download_earnings_report(request):
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
     elements = []
     
-    # Define styles
+    # Styles
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'Title',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#4a4a4a'),
-        spaceAfter=12,
-        alignment=1
-    )
-    subtitle_style = ParagraphStyle(
-        'Subtitle',
-        parent=styles['Heading2'],
-        fontSize=18,
-        textColor=colors.HexColor('#6a6a6a'),
-        spaceAfter=6,
-        alignment=1
-    )
+    title_style = ParagraphStyle('Title', fontSize=24, alignment=1, spaceAfter=12)
+    heading_style = ParagraphStyle('Heading', fontSize=18, alignment=0, spaceAfter=6, spaceBefore=12)
     normal_style = styles['Normal']
     
-    # Add title and date
-    elements.append(Paragraph("Craftsy Artisan Earnings Report", title_style))
-    elements.append(Paragraph(f"Generated on: {timezone.now().strftime('%B %d, %Y')}", subtitle_style))
-    elements.append(Spacer(1, 0.25*inch))
-    
-    # Add artisan info
+    # Title
+    elements.append(Paragraph("Detailed Artisan Earnings Report", title_style))
+    elements.append(Paragraph(f"Generated on: {timezone.now().strftime('%B %d, %Y')}", normal_style))
     elements.append(Paragraph(f"Artisan: {artisan.user.get_full_name()}", normal_style))
     elements.append(Paragraph(f"Email: {artisan.user.email}", normal_style))
     elements.append(Spacer(1, 0.25*inch))
     
-    # Add summary table
+    # Overall Summary
+    elements.append(Paragraph("Overall Summary", heading_style))
+    total_earnings = completed_orders.aggregate(Sum('total_price'))['total_price__sum'] or 0
+    total_orders = completed_orders.count()
+    average_order_value = total_earnings / total_orders if total_orders > 0 else 0
+    
     summary_data = [
         ["Total Earnings", f"${total_earnings:.2f}"],
-        ["Monthly Earnings (Last 30 days)", f"${monthly_earnings:.2f}"],
+        ["Total Orders", str(total_orders)],
         ["Average Order Value", f"${average_order_value:.2f}"],
-        ["Completed Orders", str(completed_orders.count())]
     ]
-    summary_table = Table(summary_data, colWidths=[4*inch, 2*inch])
+    summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
     summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#4a4a4a')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#4a4a4a')),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('TOPPADDING', (0, 1), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e0e0e0'))
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(summary_table)
     elements.append(Spacer(1, 0.25*inch))
     
-    # Add monthly earnings chart
-    elements.append(Paragraph("Monthly Earnings", subtitle_style))
-    monthly_data = [[month['month'].strftime("%B %Y"), f"${month['earnings']:.2f}"] for month in monthly_earnings_data]
-    monthly_table = Table([["Month", "Earnings"]] + monthly_data, colWidths=[3*inch, 3*inch])
+    # Monthly Earnings Breakdown
+    elements.append(Paragraph("Monthly Earnings Breakdown", heading_style))
+    monthly_earnings = completed_orders.annotate(month=TruncMonth('created_at')).values('month').annotate(
+        earnings=Sum('total_price'),
+        orders=Count('id')
+    ).order_by('month')
+    
+    monthly_data = [["Month", "Earnings", "Orders"]]
+    for entry in monthly_earnings:
+        monthly_data.append([
+            entry['month'].strftime("%B %Y"),
+            f"${entry['earnings']:.2f}",
+            str(entry['orders'])
+        ])
+    
+    monthly_table = Table(monthly_data, colWidths=[2*inch, 2*inch, 2*inch])
     monthly_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#4a4a4a')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#4a4a4a')),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('TOPPADDING', (0, 1), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e0e0e0'))
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(monthly_table)
     elements.append(Spacer(1, 0.25*inch))
     
-    # Add top selling products
-    elements.append(Paragraph("Top Selling Products", subtitle_style))
-    top_products_data = [[product.name, str(product.sales_count)] for product in top_products]
-    top_products_table = Table([["Product", "Sales"]] + top_products_data, colWidths=[4*inch, 2*inch])
-    top_products_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#4a4a4a')),
+    # Product Performance
+    elements.append(Paragraph("Product Performance", heading_style))
+    product_performance = products.annotate(
+        total_sales=Sum('orderitem__price'),
+        units_sold=Sum('orderitem__quantity')
+    ).order_by('-total_sales')
+    
+    product_data = [["Product", "Total Sales", "Units Sold", "Avg. Price"]]
+    for product in product_performance:
+        avg_price = product.total_sales / product.units_sold if product.units_sold else 0
+        product_data.append([
+            product.name,
+            f"${product.total_sales:.2f}" if product.total_sales else "$0.00",
+            str(product.units_sold or 0),
+            f"${avg_price:.2f}"
+        ])
+    
+    product_table = Table(product_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+    product_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#4a4a4a')),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('TOPPADDING', (0, 1), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
-        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e0e0e0'))
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
-    elements.append(top_products_table)
+    elements.append(product_table)
+    elements.append(Spacer(1, 0.25*inch))
+    
+    # Recent Orders
+    elements.append(Paragraph("Recent Orders (Last 10)", heading_style))
+    recent_orders = completed_orders.order_by('-created_at')[:10]
+    
+    order_data = [["Order ID", "Date", "Total", "Items"]]
+    for order in recent_orders:
+        items = ", ".join([f"{item.product.name} (x{item.quantity})" for item in order.items.all()])
+        order_data.append([
+            str(order.id),
+            order.created_at.strftime("%Y-%m-%d"),
+            f"${order.total_price:.2f}",
+            items
+        ])
+    
+    order_table = Table(order_data, colWidths=[1*inch, 1.5*inch, 1.5*inch, 3.5*inch])
+    order_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    elements.append(order_table)
     
     # Build the PDF
     doc.build(elements)
@@ -1598,3 +1718,161 @@ def download_earnings_report(request):
     # present the option to save the file.
     buffer.seek(0)
     return HttpResponse(buffer, content_type='application/pdf')
+
+@login_required
+def chat_room(request, room_name):
+    messages = ChatMessage.objects.filter(thread_name=room_name).order_by('timestamp')
+    
+    if request.user.user_type == 'artisan':
+        template = 'artisan_chat_room.html'
+    else:
+        template = 'customer_chat_room.html'
+    
+    return render(request, template, {
+        'room_name': room_name,
+        'messages': messages
+    })
+
+@login_required
+def get_messages(request, room_name):
+    last_id = int(request.GET.get('last_id', 0))
+    messages = ChatMessage.objects.filter(thread_name=room_name, id__gt=last_id).order_by('timestamp')
+    return JsonResponse({
+        'messages': [
+            {
+                'id': msg.id,
+                'username': msg.user.username,
+                'message': msg.message,
+                'timestamp': msg.timestamp.isoformat(),
+                'user_type': msg.user.user_type
+            }
+            for msg in messages
+        ]
+    })
+
+@login_required
+@csrf_exempt
+def send_message(request, room_name):
+    if request.method == 'POST':
+        message = request.POST.get('message')
+        new_message = ChatMessage.objects.create(
+            user=request.user,
+            thread_name=room_name,
+            message=message,
+            timestamp=timezone.now()
+        )
+        return JsonResponse({
+            'status': 'ok',
+            'id': new_message.id,
+            'timestamp': new_message.timestamp.isoformat(),
+            'user_type': request.user.user_type
+        })
+    return JsonResponse({'status': 'error'}, status=400)
+
+@login_required
+@require_POST
+def clear_chat(request, room_name):
+    ChatMessage.objects.filter(thread_name=room_name).delete()
+    return JsonResponse({'status': 'ok'})
+
+@login_required
+def download_invoice(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    
+    if order.status != 'delivered':
+        messages.error(request, "Invoice is only available for delivered orders.")
+        return redirect('order_detail', order_id=order.id)
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    elements = []
+
+    # Styles
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name='Center', alignment=1))
+    styles.add(ParagraphStyle(name='Right', alignment=2))
+
+    # Header
+    elements.append(Paragraph("Craftsy", styles['Title']))
+    elements.append(Paragraph("Handmade with love", styles['Italic']))
+    elements.append(Spacer(1, 0.25*inch))
+
+    # Invoice details
+    invoice_data = [
+        ['Invoice No:', f'INV-{order.id:06d}'],
+        ['Date:', order.created_at.strftime('%B %d, %Y')],
+        ['Order Status:', order.get_status_display()],
+    ]
+    invoice_table = Table(invoice_data, colWidths=[1.5*inch, 4*inch])
+    invoice_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+        ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(invoice_table)
+    elements.append(Spacer(1, 0.25*inch))
+
+    # Customer details
+    elements.append(Paragraph("Bill To:", styles['Heading3']))
+    customer_data = [
+        [order.user.get_full_name()],
+        [order.user.email],
+        # Add any other available customer information here
+    ]
+    customer_table = Table(customer_data)
+    customer_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(customer_table)
+    elements.append(Spacer(1, 0.25*inch))
+
+    # Order items
+    elements.append(Paragraph("Order Details", styles['Heading3']))
+    data = [['Product', 'Artisan', 'Quantity', 'Unit Price', 'Total']]
+    for item in order.items.all():
+        data.append([
+            item.product.name,
+            item.product.artisan.user.get_full_name(),
+            str(item.quantity),
+            f"${item.price:.2f}",
+            f"${item.price * item.quantity:.2f}"
+        ])
+    
+    # Total
+    data.append(['', '', '', 'Total:', f"${order.total_price:.2f}"])
+
+    table = Table(data, colWidths=[2.5*inch, 1.5*inch, 1*inch, 1*inch, 1*inch])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('ALIGN', (-2, -1), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (-2, -1), (-1, -1), 'Helvetica-Bold'),
+    ]))
+    elements.append(table)
+
+    # Thank you message
+    elements.append(Spacer(1, 0.5*inch))
+    elements.append(Paragraph("Thank you for your purchase!", styles['Center']))
+    elements.append(Paragraph("We appreciate your support for our artisans.", styles['Center']))
+
+    # Footer
+    def add_page_number(canvas, doc):
+        page_num = canvas.getPageNumber()
+        text = f"Page {page_num}"
+        canvas.drawRightString(7.5*inch, 0.75*inch, text)
+
+    doc.build(elements, onFirstPage=add_page_number, onLaterPages=add_page_number)
+
+    buffer.seek(0)
+    return FileResponse(buffer, as_attachment=True, filename=f'invoice_order_{order.id}.pdf')

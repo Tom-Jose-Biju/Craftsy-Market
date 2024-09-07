@@ -245,6 +245,7 @@
                         <li><a href="{% url 'wishlist' %}"><i class="fas fa-heart me-2"></i>Wishlist</a></li>
                         <li><a href="{% url 'order_history' %}"><i class="fas fa-history me-2"></i>Orders</a></li>
                         <li><a href="{% url 'cart' %}"><i class="fas fa-shopping-cart me-2"></i>Cart</a></li>
+                        <li><li><a href="{% url 'chat_room' room_name=user.username|default:'general' %}" class="btn btn-primary">Chat with Artisan</a></li>
                         <li>
                             <form action="{% url 'logout' %}" method="post" class="inline">
                                 {% csrf_token %}

@@ -247,7 +247,7 @@
                         $('#recognized_category').text('Error: Only JPG files are supported');
                         return;
                     }
-
+            
                     var reader = new FileReader();
                     reader.onload = function(e) {
                         $('#image_preview').attr('src', e.target.result).removeClass('hidden');

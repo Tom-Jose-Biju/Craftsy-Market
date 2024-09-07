@@ -139,6 +139,34 @@
         .card-title{
             color: white;
         }
+        .sidebar {
+            background-color: #1a1a1a;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .sidebar h4 {
+            color: #ff6b6b;
+            margin-bottom: 15px;
+        }
+        .sidebar ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .sidebar li {
+            margin-bottom: 10px;
+        }
+        .sidebar a {
+            color: #e0e0e0;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        .sidebar a:hover {
+            color: #ff9ff3;
+        }
+        .sidebar .badge {
+            background-color: #ff6b6b;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -168,6 +196,9 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'artisan_blog_write' %}"><i class="fas fa-pen me-2"></i>Write Blog</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'chat_room' room_name=user.username|default:'general' %}" class="btn btn-primary">Chat with Customer</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'logout' %}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>

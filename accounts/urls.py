@@ -3,6 +3,8 @@ from django.urls import include, path
 from .views import artisan_documents
 from accounts.views import classify_image
 from django.views.decorators.csrf import ensure_csrf_cookie
+from accounts.views import get_artisan_info
+from accounts.views import download_invoice
 
 
 
@@ -26,7 +28,8 @@ urlpatterns = [
     path('products/', views.products, name='products'),
     path('artisan/products/', views.artisan_products, name='artisan_products'),
     path('artisan/product/update/<int:product_id>/', views.update_product, name='update_product'),
-    path('delete_product/<int:product_id>/', views.delete_product, name='delete_product'),
+    path('disable_product/<int:product_id>/', views.disable_product, name='disable_product'),
+    path('toggle_product_status/<int:product_id>/', views.toggle_product_status, name='toggle_product_status'),
     path('product/<int:product_id>/', views.product_detail, name='product_detail'),
     path('artisan/reviews/', views.artisan_reviews, name='artisan_reviews'),
     path('artisan/orders/', views.artisan_order_details, name='artisan_order_details'),
@@ -96,4 +99,11 @@ urlpatterns = [
     path('blog/<int:blog_id>/comments/', views.get_blog_comments, name='get_blog_comments'),
     path('blog/comment/<int:comment_id>/delete/', views.delete_comment, name='delete_comment'),
     path('download-earnings-report/', views.download_earnings_report, name='download_earnings_report'),
+    path('chat/<str:room_name>/', views.chat_room, name='chat_room'),
+    path('chat/get_messages/<str:room_name>/', views.get_messages, name='get_messages'),
+    path('chat/send_message/<str:room_name>/', views.send_message, name='send_message'),
+    path('chat/clear_chat/<str:room_name>/', views.clear_chat, name='clear_chat'),
+    path('get-artisan-info/<int:artisan_id>/', views.get_artisan_info, name='get_artisan_info'),
+    path('artisan-products/<int:artisan_id>/', views.artisan_products_view, name='artisan_products_view'),
+    path('order/<int:order_id>/invoice/', download_invoice, name='download_invoice'),
 ]

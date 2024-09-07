@@ -84,6 +84,7 @@ class Product(models.Model):
     artisan = models.ForeignKey(Artisan, on_delete=models.CASCADE, related_name='products')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
@@ -92,8 +93,8 @@ class Product(models.Model):
         return self.inventory > 0
 
     def classify_image(self, image_file):
-        print("Loading EfficientNet model...")
-        model = EfficientNetB0(weights='imagenet', include_top=True)
+        print("Loading custom EfficientNet model...")
+        model = tf.keras.models.load_model('custom_efficientnet_model.h5')
         print("Model loaded successfully")
 
         print(f"Image file type: {type(image_file)}")
@@ -108,16 +109,17 @@ class Product(models.Model):
         print("Image loaded successfully")
         x = image.img_to_array(img)
         x = np.expand_dims(x, axis=0)
-        x = preprocess_input(x)
+        x = x / 255.0  # Normalize the image
 
         print("Making prediction...")
         preds = model.predict(x)
         print("Prediction made successfully")
-        predicted_class = decode_predictions(preds, top=5)[0]
-        print(f"Predicted classes: {predicted_class}")
+        predicted_class_index = np.argmax(preds[0])
+        category_names = list(self.CATEGORY_CHOICES)
+        predicted_category = category_names[predicted_class_index]
+        print(f"Predicted category: {predicted_category}")
 
-        category_name = self.map_prediction_to_category(predicted_class)
-        return category_name
+        return predicted_category
 
     @staticmethod
     def map_prediction_to_category(predictions):
@@ -283,3 +285,14 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.user.username} on {self.blog.title}"
+
+class ChatMessage(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    thread_name = models.CharField(max_length=50)
+    message = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.user.username}: {self.message}'
+    class Meta:
+        ordering = ['timestamp']

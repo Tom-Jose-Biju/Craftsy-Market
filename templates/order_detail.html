@@ -230,5 +230,14 @@
         }
     </script>
 
+    <!-- Add this section after the order status information -->
+    {% if order.status == 'delivered' %}
+        <div class="mt-3">
+            <a href="{% url 'download_invoice' order.id %}" class="btn btn-primary">
+                <i class="fas fa-file-pdf me-2"></i>Download Invoice
+            </a>
+        </div>
+    {% endif %}
+
 </body>
 </html>

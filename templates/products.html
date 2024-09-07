@@ -35,81 +35,93 @@
             margin: 6rem auto 2rem;
         }
         .product-card {
-            height: 300px;
-            display: flex;
-            flex-direction: column;
-            transition: all 0.3s ease;
+            @apply card bg-base-100 shadow-xl transition-all duration-300 hover:shadow-2xl;
+            height: 450px;
+            margin-bottom: 2rem;
+            perspective: 1000px;
+            transform-style: preserve-3d;
         }
-        .product-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(255, 255, 255, 0.1);
-        }
-        .product-image {
-            height: 60%;
-            overflow: hidden;
-        }
-        .product-image img {
+        .product-card-inner {
+            position: relative;
             width: 100%;
             height: 100%;
-            object-fit: cover;
-            transition: all 0.3s ease;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
         }
-        .product-details {
-            height: 40%;
-            padding: 10px;
+        .product-card:hover .product-card-inner {
+            transform: rotateY(180deg);
+        }
+        .product-card-front, .product-card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .product-card-back {
+            background-color: #2a2a2a;
+            transform: rotateY(180deg);
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
         }
-        .product-title {
-            font-size: 1rem;
-            margin-bottom: 5px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .product-image {
+            @apply h-56 overflow-hidden;
         }
-        .product-price {
-            font-size: 0.9rem;
-            margin-bottom: 5px;
-        }
-        .btn-view-details {
-            font-size: 0.8rem;
-            padding: 5px 10px;
+        .product-image img {
+            @apply w-full h-full object-cover transition-transform duration-300;
+            filter: brightness(0.9);
         }
         .product-card:hover .product-image img {
             transform: scale(1.1);
+            filter: brightness(1.1);
         }
         .product-details {
-            padding: 20px;
+            @apply card-body p-4;
         }
         .product-title {
+            @apply card-title text-primary;
             font-size: 1.2rem;
-            margin-bottom: 10px;
-            color: #d11717;
+            margin-bottom: 0.5rem;
         }
         .product-description {
-            font-size: 0.9rem;
-            margin-bottom: 15px;
-            color: #ddd;
+            @apply text-sm text-base-content opacity-70;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
         .product-price {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: #ff9ff3;
+            @apply text-lg font-bold text-secondary;
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
         .product-artisan {
-            font-size: 0.8rem;
-            color: #aaa;
+            @apply text-xs text-base-content opacity-50;
+        }
+        .product-rating {
+            @apply text-xs text-warning;
+            display: flex;
+            align-items: center;
+            margin-top: 0.5rem;
+        }
+        .product-rating i {
+            color: #ffd700;
+            margin-right: 0.25rem;
         }
         .btn-view-details {
-            background-color: #ce1919;
+            @apply btn btn-primary btn-sm w-full mt-2;
+            background: linear-gradient(45deg, #4a69bd, #6a89cc);
             border: none;
-            color: #fff;
             transition: all 0.3s ease;
         }
         .btn-view-details:hover {
-            background-color: #32cf3f;
-            color: #000;
+            transform: translateY(-3px);
+            box-shadow: 0 4px 15px rgba(106, 137, 204, 0.4);
         }
         .category-sidebar {
             background-color: rgba(34, 34, 34, 0.8);
@@ -210,9 +222,9 @@
                     <div class="mb-4">
                         <h4 class="sidebar-title"><i class="fas fa-filter me-2"></i>Filter by Price</h4>
                         <form method="GET" action="{% url 'products' %}" class="flex items-center space-x-2">
-                            <input type="number" name="min_price" placeholder="Min Price" class="input input-bordered input-sm w-24" value="{{ request.GET.min_price }}">
+                            <input type="number" name="min_price" placeholder="Min Price" class="input input-bordered input-sm w-24" value="{{ request.GET.min_price }}" min="0">
                             <span>to</span>
-                            <input type="number" name="max_price" placeholder="Max Price" class="input input-bordered input-sm w-24" value="{{ request.GET.max_price }}">
+                            <input type="number" name="max_price" placeholder="Max Price" class="input input-bordered input-sm w-24" value="{{ request.GET.max_price }}" min="0">
                             <button type="submit" class="btn btn-primary btn-sm">Apply</button>
                             {% if request.GET.min_price or request.GET.max_price %}
                                 <a href="{% url 'products' %}" class="btn btn-ghost btn-sm">Clear</a>
@@ -222,30 +234,40 @@
                     <h2 class="text-center mb-5"><i class="fas fa-gem me-2"></i>Handcrafted Treasures</h2>
                     <div class="row">
                         {% for product in products %}
-                        <div class="col-md-4 mb-4">
-                            <div class="product-card h-100">
-                                <div class="product-image">
-                                    {% if product.images.first %}
-                                        <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}">
-                                    {% else %}
-                                        <img src="https://via.placeholder.com/300x200?text=No+Image" alt="Default Product Image">
-                                    {% endif %}
-                                </div>
-                                <div class="product-details d-flex flex-column justify-content-between">
-                                    <div>
-                                        <h5 class="product-title"><i class="fas fa-gift me-2"></i>{{ product.name }}</h5>
-                                        <p class="product-price"><i class="fas fa-tag me-2"></i>₹{{ product.price }}</p>
-                                    </div>
-                                    <div class="mt-2">
-                                        {% if product.id %}
-                                            <a href="{% url 'product_detail' product.id %}" class="btn btn-view-details btn-sm w-100">View Details</a>
-                                        {% else %}
-                                            <span class="btn btn-view-details btn-sm disabled w-100">View Details</span>
-                                        {% endif %}
+                            {% if product.is_active %}
+                            <div class="col-md-4 mb-4">
+                                <div class="product-card">
+                                    <div class="product-card-inner">
+                                        <div class="product-card-front">
+                                            <figure class="product-image">
+                                                {% if product.images.first %}
+                                                    <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}">
+                                                {% else %}
+                                                    <img src="{% static 'images/default_product.jpg' %}" alt="Default Product Image">
+                                                {% endif %}
+                                            </figure>
+                                            <div class="product-details">
+                                                <h5 class="product-title">{{ product.name }}</h5>
+                                                <p class="product-price">${{ product.price }}</p>
+                                                <div class="product-rating" data-reviews="{{ product.reviews_json }}">
+                                                    <i class="fas fa-star"></i>
+                                                    {% if product.reviews.count > 0 %}
+                                                        {{ product.reviews.aggregate.Avg.rating__avg|floatformat:1 }} ({{ product.reviews.count }})
+                                                    {% else %}
+                                                        No reviews yet
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="product-card-back">
+                                            <p class="product-description">{{ product.description|truncatewords:30 }}</p>
+                                            <p class="product-artisan">By: {{ product.artisan.user.username }}</p>
+                                            <a href="{% url 'product_detail' product.id %}" class="btn-view-details">View Details</a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                            {% endif %}
                         {% endfor %}
                     </div>
                 </div>

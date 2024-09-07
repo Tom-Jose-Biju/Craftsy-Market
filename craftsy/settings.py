@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import os
 from pathlib import Path
 import tensorflow as tf
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,6 +52,7 @@ INSTALLED_APPS = [
     'accounts',
     'widget_tweaks',
     'social_django',
+    'channels',
 ]
 
 
@@ -169,3 +172,14 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 # Increase the maximum upload size (adjust as needed)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
+
+ASGI_APPLICATION = 'craftsy.asgi.application'
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.FileChannelLayer",
+        "CONFIG": {
+            "ROOT_DIR": os.path.join(BASE_DIR, "channel_layers"),
+        },
+    },
+}

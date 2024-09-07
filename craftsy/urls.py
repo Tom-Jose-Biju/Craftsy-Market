@@ -26,6 +26,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),  # Admin panel URL
     path('',include('accounts.urls')),
     path('oauth/', include('social_django.urls', namespace='social')),
+    path('chat/', include('craftsy.routing')),
 
 ]
 if settings.DEBUG:
