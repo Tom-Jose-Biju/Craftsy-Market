@@ -4,7 +4,7 @@
         <span class="order-status status-{{ order.status|lower }}">{{ order.get_status_display }}</span>
     </div>
     <p><strong>Date:</strong> {{ order.created_at|date:"F d, Y" }}</p>
-    <p><strong>Total:</strong> ${{ order.total_price }}</p>
+    <p><strong>Total:</strong> ₹{{ order.total_price }}</p>
     <div class="order-items">
         {% for item in order.items.all %}
             <p>{{ item.product.name }} (x{{ item.quantity }})</p>

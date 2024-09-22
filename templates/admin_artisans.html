@@ -90,6 +90,51 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card bg-base-100 shadow-xl mt-8">
+                    <div class="card-body">
+                        <h2 class="card-title mb-4">Authenticity Certificates</h2>
+                        <div class="overflow-x-auto">
+                            <table id="certificatesTable" class="table table-zebra w-full">
+                                <thead>
+                                    <tr>
+                                        <th>Artisan</th>
+                                        <th>Product</th>
+                                        <th>Document</th>
+                                        <th>Uploaded At</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for doc in authenticity_documents %}
+                                    <tr>
+                                        <td>{{ doc.product.artisan.user.username }}</td>
+                                        <td>{{ doc.product.name }}</td>
+                                        <td>
+                                            <a href="{{ doc.document.url }}" target="_blank" class="btn btn-sm btn-info">View Document</a>
+                                        </td>
+                                        <td>{{ doc.uploaded_at|date:"M d, Y H:i" }}</td>
+                                        <td>
+                                            {% if doc.is_verified %}
+                                                <span class="badge badge-success">Verified</span>
+                                            {% else %}
+                                                <span class="badge badge-warning">Pending</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if not doc.is_verified %}
+                                                <button class="btn btn-sm btn-success verify-btn" data-id="{{ doc.id }}">Verify</button>
+                                                <button class="btn btn-sm btn-error reject-btn" data-id="{{ doc.id }}">Reject</button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div> 
         <div class="drawer-side">
@@ -176,6 +221,68 @@
         document.getElementById('pageSize').addEventListener('change', changePageSize);
 
         renderTable();
+
+        function handleDocument(docId, action) {
+            console.log(`Attempting to ${action} document ${docId}`);
+            const formData = new FormData();
+            formData.append('document_id', docId);
+            formData.append('action', action);
+            fetch('{% url "admin_artisans" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(`${action.charAt(0).toUpperCase() + action.slice(1)} response:`, data);
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert(`Failed to ${action} document: ` + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(`An error occurred while ${action}ing the document: ` + error.message);
+            });
+        }
+
+        document.querySelectorAll('.verify-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const docId = this.dataset.id;
+                handleDocument(docId, 'verify');
+            });
+        });
+
+        document.querySelectorAll('.reject-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const docId = this.dataset.id;
+                handleDocument(docId, 'reject');
+            });
+        });
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
     </script>
 </body>
 </html>

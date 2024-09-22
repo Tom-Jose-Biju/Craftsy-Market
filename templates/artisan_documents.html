@@ -71,42 +71,45 @@
         .btn-info {
             background-color: #17a2b8;
             border: none;
-            color: white;
         }
         .btn-info:hover {
             background-color: #138496;
-            color: white;
         }
-        .fixed-top{
-            position: relative;
-            top: 0;
-            width: 100%;
+        .verified-badge {
+            background-color: #28a745;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 5px;
+        }
+        .pending-badge {
+            background-color: #ffc107;
+            color: black;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 5px;
         }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'artisan_home' %}">Craftsy</a>
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Craftsy Market</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'artisanview' %}"><i class="fas fa-home me-2"></i>Home</a>
+                        <a class="nav-link" href="{% url 'artisan_home' %}">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'artisan_profile' %}"><i class="fas fa-user me-2"></i>Profile</a>
+                        <a class="nav-link" href="{% url 'artisan_profile' %}">Profile</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'add_product' %}"><i class="fas fa-plus-circle me-2"></i>Add Product</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'artisan_products' %}"><i class="fas fa-box me-2"></i>My Products</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'logout' %}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
+                        <a class="nav-link" href="{% url 'logout' %}">Logout</a>
                     </li>
                 </ul>
             </div>
@@ -177,6 +180,11 @@
                                         <i class="fas fa-certificate fa-3x mb-2"></i>
                                         <p>{{ doc.product.name }}</p>
                                         <a href="{{ doc.document.url }}" class="btn btn-sm btn-info" target="_blank">View</a>
+                                        {% if doc.is_verified %}
+                                            <span class="verified-badge">Verified</span>
+                                        {% else %}
+                                            <span class="pending-badge">Pending</span>
+                                        {% endif %}
                                     </div>
                                 </div>
                             {% endfor %}

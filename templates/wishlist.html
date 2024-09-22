@@ -146,7 +146,15 @@
                             <div class="product-details d-flex flex-column justify-content-between">
                                 <div>
                                     <h5 class="product-title"><i class="fas fa-gift me-2"></i>{{ product.name }}</h5>
-                                    <p class="product-price"><i class="fas fa-tag me-2"></i>₹{{ product.price }}</p>
+                                    <p class="product-price">
+                                        <i class="fas fa-tag me-2"></i>Base: ₹{{ product.price|floatformat:2 }}
+                                    </p>
+                                    <p class="product-price">
+                                        GST ({{ GST_RATE|floatformat:0 }}%): ₹{{ product.gst_amount|floatformat:2 }}
+                                    </p>
+                                    <p class="product-price">
+                                        Total: ₹{{ product.total_price|floatformat:2 }}
+                                    </p>
                                 </div>
                                 <div class="mt-2">
                                     <a href="{% url 'product_detail' product.id %}" class="btn btn-view-details btn-sm w-100 mb-2">View Details</a>

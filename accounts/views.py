@@ -55,6 +55,8 @@ import base64
 import matplotlib.pyplot as plt
 from django.http import FileResponse
 from .models import AuthenticityDocument
+from django.contrib.auth.decorators import login_required, user_passes_test
+
 
 
 
@@ -163,14 +165,34 @@ def admin_users(request):
     return render(request, 'admin_users.html', context)
 
 @login_required
+@user_passes_test(lambda u: u.is_staff)
 def admin_artisans(request):
-    if not request.user.is_staff:
-        messages.error(request, "You don't have access to this page.")
-        return redirect('home')
+    if request.method == 'POST':
+        document_id = request.POST.get('document_id')
+        action = request.POST.get('action')
+        
+        if document_id and action in ['verify', 'reject']:
+            try:
+                document = get_object_or_404(AuthenticityDocument, id=document_id)
+                if action == 'verify':
+                    document.is_verified = True
+                    message = 'Document verified successfully.'
+                else:
+                    document.is_verified = False
+                    message = 'Document rejected successfully.'
+                document.save()
+                return JsonResponse({'success': True, 'message': message})
+            except Exception as e:
+                return JsonResponse({'success': False, 'message': str(e)}, status=500)
+        else:
+            return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
     
     artisans = User.objects.filter(user_type='artisan')
+    authenticity_documents = AuthenticityDocument.objects.select_related('product__artisan__user').all()
+    
     context = {
         'artisans': artisans,
+        'authenticity_documents': authenticity_documents,
     }
     return render(request, 'admin_artisans.html', context)
 
@@ -260,6 +282,7 @@ def delete_product(request, product_id):
     return redirect('artisan_products')
 
 @login_required
+@login_required
 def admin_add_category(request):
     if not request.user.is_staff:
         messages.error(request, "You don't have access to this page.")
@@ -267,9 +290,19 @@ def admin_add_category(request):
     
     if request.method == 'POST':
         category_name = request.POST.get('category_name')
+        parent_id = request.POST.get('parent_category')
+        is_subcategory = request.POST.get('is_subcategory') == 'on'
+        
         if category_name:
-            Category.objects.create(name=category_name)
-            messages.success(request, f"Category '{category_name}' has been added successfully.")
+            parent = None
+            if parent_id:
+                parent = Category.objects.get(id=parent_id)
+            
+            if is_subcategory and not parent:
+                messages.error(request, "Please select a parent category for the subcategory.")
+            else:
+                Category.objects.create(name=category_name, parent=parent)
+                messages.success(request, f"{'Subcategory' if is_subcategory else 'Category'} '{category_name}' has been added successfully.")
             return redirect('admin_add_category')
         else:
             messages.error(request, "Category name cannot be empty.")
@@ -287,15 +320,24 @@ def admin_edit_category(request, category_id):
     
     if request.method == 'POST':
         category_name = request.POST.get('category_name')
+        parent_id = request.POST.get('parent_category')
         if category_name:
             category.name = category_name
+            if parent_id:
+                parent = Category.objects.get(id=parent_id)
+                if parent != category:
+                    category.parent = parent
+            else:
+                category.parent = None
             category.save()
             messages.success(request, f"Category '{category.name}' has been updated successfully.")
             return redirect('admin_add_category')
         else:
             messages.error(request, "Category name cannot be empty.")
     
-    return render(request, 'admin_add_category.html', {'category': category})
+    categories = Category.objects.exclude(id=category_id)
+    return render(request, 'admin_add_category.html', {'category': category, 'categories': categories})
+
 
 @login_required
 @require_POST
@@ -433,7 +475,7 @@ from django.db.models import Q
 
 def products(request):
     products = Product.objects.filter(is_active=True)
-    categories = Category.objects.filter(is_active=True)  # Only active categories
+    categories = Category.objects.filter(parent=None).prefetch_related('subcategories')# Only active categories
     search_query = request.GET.get('search')
     category_id = request.GET.get('category')
     min_price = request.GET.get('min_price')
@@ -596,6 +638,7 @@ from .models import Review, Product
 from .forms import ReviewForm
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
+from decimal import Decimal
 
 def product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id)
@@ -604,6 +647,10 @@ def product_detail(request, product_id):
 
     related_products = Product.objects.filter(category=product.category).exclude(id=product.id)[:3]
     has_authenticity_certificate = AuthenticityDocument.objects.filter(product=product).exists()
+
+    gst_rate = Decimal(str(settings.GST_RATE))
+    gst_amount = product.price * gst_rate
+    total_price = product.price + gst_amount
     
     context = {
         'product': product,
@@ -613,6 +660,9 @@ def product_detail(request, product_id):
         'inventory_count': product.inventory,
         'related_products': related_products,
         'has_authenticity_certificate': has_authenticity_certificate,
+        'gst_amount': gst_amount,
+        'total_price': total_price,
+        'GST_RATE': gst_rate * 100,
     }
     return render(request, 'product_detail.html', context)
 
@@ -682,7 +732,7 @@ def checkout(request):
                 product = Product.objects.get(id=item['id'])
                 line_items.append({
                     'price_data': {
-                        'currency': 'usd',
+                        'currency': 'inr',
                         'unit_amount': int(product.price * 100),
                         'product_data': {
                             'name': product.name,
@@ -752,8 +802,16 @@ def cart(request):
 def wishlist(request):
     wishlist = request.session.get('wishlist', [])
     wishlist_items = Product.objects.filter(id__in=wishlist)
+
+    gst_rate = Decimal(str(settings.GST_RATE))
+    
+    for item in wishlist_items:
+        item.gst_amount = item.price * gst_rate
+        item.total_price = item.price + item.gst_amount
+
     context = {
-        'wishlist_items': wishlist_items
+        'wishlist_items': wishlist_items,
+        'GST_RATE': gst_rate * 100,
     }
     return render(request, 'wishlist.html', context)
 
@@ -761,29 +819,33 @@ def wishlist(request):
 @require_POST
 def single_product_checkout(request, product_id):
     product = get_object_or_404(Product, id=product_id)
-    if not product.is_in_stock():
-        return JsonResponse({'success': False, 'error': 'Product is out of stock'})
+    quantity = 1  # For single product checkout, we assume quantity is 1
+
+    gst_rate = Decimal(str(settings.GST_RATE))
+    base_price = product.price
+    gst_amount = base_price * gst_rate
+    total_price = base_price + gst_amount
+
+    line_items = [{
+        'price_data': {
+            'currency': 'inr',
+            'unit_amount': int(total_price * 100),  # Stripe expects amount in cents
+            'product_data': {
+                'name': product.name,
+                'description': f'Base Price: ₹{base_price}, GST: ₹{gst_amount}',
+            },
+        },
+        'quantity': quantity,
+    }]
+
     try:
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
-            line_items=[{
-                'price_data': {
-                    'currency': 'usd',
-                    'unit_amount': int(product.price * 100),
-                    'product_data': {
-                        'name': product.name,
-                        'description': product.description[:100],
-                    },
-                },
-                'quantity': 1,
-            }],
+            line_items=line_items,
             mode='payment',
-            success_url=request.build_absolute_uri(reverse('payment_success')),
+            success_url=request.build_absolute_uri(reverse('payment_success')) + '?session_id={CHECKOUT_SESSION_ID}',
             cancel_url=request.build_absolute_uri(reverse('payment_cancel')),
         )
-        # Decrease inventory by 1
-        product.inventory -= 1
-        product.save()
         return JsonResponse({'success': True, 'checkout_url': checkout_session.url})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -817,16 +879,41 @@ def add_to_cart(request):
 
 @login_required
 def get_cart(request):
-    cart, created = Cart.objects.get_or_create(user=request.user)
-    cart_items = []
-    for cart_item in cart.items.all():
-        cart_items.append({
-            'id': cart_item.product.id,
-            'name': cart_item.product.name,
-            'price': float(cart_item.product.price),
-            'quantity': cart_item.quantity,
+    cart = Cart.objects.get(user=request.user)
+    cart_items = cart.items.all()
+    total_items = sum(item.quantity for item in cart_items)
+    
+    gst_rate = Decimal(str(settings.GST_RATE))
+    
+    cart_data = []
+    total = Decimal('0.00')
+    total_gst = Decimal('0.00')
+    
+    for item in cart_items:
+        base_price = item.product.price * item.quantity
+        gst_amount = base_price * gst_rate
+        item_total = base_price + gst_amount
+        
+        total += item_total
+        total_gst += gst_amount
+        
+        cart_data.append({
+            'id': item.product.id,
+            'name': item.product.name,
+            'quantity': item.quantity,
+            'base_price': float(base_price),
+            'gst_amount': float(gst_amount),
+            'total_price': float(item_total),
+            'image_url': item.product.images.first().image.url if item.product.images.exists() else '',
         })
-    return JsonResponse({'cart_items': cart_items})
+    
+    return JsonResponse({
+        'cart_items': cart_data,
+        'total_items': total_items,
+        'subtotal': float(total - total_gst),
+        'total_gst': float(total_gst),
+        'total': float(total),
+    })
 
 @login_required
 @require_POST
@@ -1876,3 +1963,24 @@ def download_invoice(request, order_id):
 
     buffer.seek(0)
     return FileResponse(buffer, as_attachment=True, filename=f'invoice_order_{order.id}.pdf')
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+@require_POST
+def handle_authenticity_document(request, document_id, action):
+    try:
+        document = get_object_or_404(AuthenticityDocument, id=document_id)
+        
+        if action == 'verify':
+            document.is_verified = True
+            message = 'Document verified successfully.'
+        elif action == 'reject':
+            document.is_verified = False
+            message = 'Document rejected successfully.'
+        else:
+            return JsonResponse({'success': False, 'message': 'Invalid action.'}, status=400)
+        
+        document.save()
+        return JsonResponse({'success': True, 'message': message})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)

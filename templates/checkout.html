@@ -174,7 +174,9 @@
             <!-- Cart items will be dynamically inserted here -->
         </div>
         <div class="total-price">
-            Total: ₹<span id="totalAmount">0.00</span>
+            <div>Subtotal: ₹<span id="subtotalAmount">0.00</span></div>
+            <div>GST: ₹<span id="gstAmount">0.00</span></div>
+            <div>Total: ₹<span id="totalAmount">0.00</span></div>
         </div>
         
         <div class="payment-methods">
@@ -240,33 +242,35 @@
                 
                     function loadCheckoutItems() {
                         $.ajax({
-                            url: "{% url 'get_cart' %}",  // Ensure this URL is correct
+                            url: "{% url 'get_cart' %}",
                             method: "GET",
                             success: function(response) {
                                 const checkoutItems = $('#checkoutItems');
                                 checkoutItems.empty();
-                                let total = 0;
-                
+                    
                                 response.cart_items.forEach(item => {
-                                    const itemTotal = item.price * item.quantity;
-                                    total += itemTotal;
-                
                                     checkoutItems.append(`
                                         <div class="checkout-item">
                                             <div class="checkout-item-name">${item.name} (x${item.quantity})</div>
-                                            <div class="checkout-item-price">₹${itemTotal.toFixed(2)}</div>
+                                            <div class="checkout-item-price">
+                                                <div>Base: ₹${item.base_price.toFixed(2)}</div>
+                                                <div>GST: ₹${item.gst_amount.toFixed(2)}</div>
+                                                <div>Total: ₹${item.total_price.toFixed(2)}</div>
+                                            </div>
                                         </div>
                                     `);
                                 });
-                
-                                $('#totalAmount').text(total.toFixed(2));
+                    
+                                $('#subtotalAmount').text(response.subtotal.toFixed(2));
+                                $('#gstAmount').text(response.total_gst.toFixed(2));
+                                $('#totalAmount').text(response.total.toFixed(2));
                             },
                             error: function(xhr, status, error) {
                                 console.error("Error fetching cart data:", status, error);
                             }
                         });
                     }
-                
+                    
                     $(document).ready(function() {
                         loadCheckoutItems();
                     });

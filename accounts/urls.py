@@ -106,4 +106,6 @@ urlpatterns = [
     path('get-artisan-info/<int:artisan_id>/', views.get_artisan_info, name='get_artisan_info'),
     path('artisan-products/<int:artisan_id>/', views.artisan_products_view, name='artisan_products_view'),
     path('order/<int:order_id>/invoice/', download_invoice, name='download_invoice'),
+
+    # Add these new URL patterns
 ]

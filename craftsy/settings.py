@@ -183,3 +183,5 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+GST_RATE = 0.18

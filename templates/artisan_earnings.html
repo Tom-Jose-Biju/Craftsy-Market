@@ -66,21 +66,21 @@
             <div class="card bg-base-200 shadow-xl">
                 <div class="card-body">
                     <h2 class="card-title text-white">Total Earnings</h2>
-                    <p class="text-4xl font-bold text-white">${{ total_earnings|floatformat:2 }}</p>
+                    <p class="text-4xl font-bold text-white">₹{{ total_earnings|floatformat:2 }}</p>
                     <p class="text-sm opacity-70 text-whitesmoke">Lifetime earnings</p>
                 </div>
             </div>
             <div class="card bg-base-200 shadow-xl">
                 <div class="card-body">
                     <h2 class="card-title text-white">This Month</h2>
-                    <p class="text-4xl font-bold text-white">${{ monthly_earnings|floatformat:2 }}</p>
+                    <p class="text-4xl font-bold text-white">₹{{ monthly_earnings|floatformat:2 }}</p>
                     <p class="text-sm opacity-70 text-whitesmoke">Earnings in the last 30 days</p>
                 </div>
             </div>
             <div class="card bg-base-200 shadow-xl">
                 <div class="card-body">
                     <h2 class="card-title text-white">Average Order Value</h2>
-                    <p class="text-4xl font-bold text-white">${{ average_order_value|floatformat:2 }}</p>
+                    <p class="text-4xl font-bold text-white">₹{{ average_order_value|floatformat:2 }}</p>
                     <p class="text-sm opacity-70 text-whitesmoke">Per completed order</p>
                 </div>
             </div>
@@ -148,7 +148,7 @@
                         <td>{{ transaction.order.id }}</td>
                         <td>{{ transaction.order.created_at|date:"M d, Y" }}</td>
                         <td>{{ transaction.product.name }}</td>
-                        <td>${{ transaction.price|floatformat:2 }}</td>
+                        <td>₹{{ transaction.price|floatformat:2 }}</td>
                         <td>
                             <span class="badge badge-{{ transaction.order.status|lower }}">
                                 {{ transaction.order.status|title }}

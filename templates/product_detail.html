@@ -70,11 +70,22 @@
             margin-bottom: 20px;
             font-weight: 600;
         }
-        .product-price {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: #ff9ff3;
+        .price-container {
             margin-bottom: 20px;
+        }
+        .main-price {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #ff6b6b;
+            margin-bottom: 5px;
+        }
+        .price-breakdown {
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+        .base-price, .gst-amount {
+            display: inline-block;
+            margin-right: 15px;
         }
         .product-description {
             margin-bottom: 20px;
@@ -340,7 +351,13 @@
                             <span class="badge bg-success cursor-pointer" onclick="openAuthenticityPopup()" title="Authenticity Verified"><i class="fas fa-certificate"></i> Verified</span>
                         {% endif %}
                     </h1>
-                    <p class="product-price">₹<span id="product-price">{{ product.price }}</span></p>
+                    <div class="price-container">
+                        <div class="main-price">₹<span id="total-price">{{ total_price|floatformat:2 }}</span></div>
+                        <div class="price-breakdown">
+                            <span class="base-price">Base: ₹<span id="product-price">{{ product.price }}</span></span>
+                            <span class="gst-amount">GST ({{ GST_RATE|floatformat:0 }}%): ₹<span id="gst-amount">{{ gst_amount|floatformat:2 }}</span></span>
+                        </div>
+                    </div>
                     <p class="product-description">{{ product.description }}</p>
                     <p class="product-artisan">
                         <i class="fas fa-user-circle me-2"></i>Crafted by: 
@@ -498,13 +515,19 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/magnific-popup.js/1.1.0/jquery.magnific-popup.min.js"></script>
     <script>
         const basePrice = {{ product.price }};
+        const gstRate = {{ GST_RATE }};
         let cart = [];
         let wishlist = [];
 
         function updatePrice() {
             const quantity = parseInt($('#quantity').val());
-            const newPrice = (basePrice * quantity).toFixed(2);
-            $('#product-price').text(newPrice);
+            const newBasePrice = (basePrice * quantity).toFixed(2);
+            const newGstAmount = (newBasePrice * gstRate).toFixed(2);
+            const newTotalPrice = (parseFloat(newBasePrice) + parseFloat(newGstAmount)).toFixed(2);
+            
+            $('#product-price').text(newBasePrice);
+            $('#gst-amount').text(newGstAmount);
+            $('#total-price').text(newTotalPrice);
         }
 
         function incrementQuantity() {

@@ -40,6 +40,17 @@
                                 </label>
                                 <input type="text" name="category_name" class="input input-bordered" required>
                             </div>
+                            <div class="form-control mt-4">
+                                <label class="label">
+                                    <span class="label-text">Parent Category (optional)</span>
+                                </label>
+                                <select name="parent_category" class="select select-bordered">
+                                    <option value="">None (Top-level category)</option>
+                                    {% for category in categories %}
+                                        <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                             <div class="form-control mt-6">
                                 <button type="submit" class="btn btn-primary">Add Category</button>
                             </div>
@@ -53,6 +64,7 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
+                                <th>Parent Category</th>
                                 <th>Products</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -61,8 +73,17 @@
                         <tbody>
                             {% for category in categories %}
                             <tr>
-                                <td>{{ category.name }}</td>
-                                <td>{{ category.product_set.count }}</td>
+                                <td>
+                                    {% if category.parent %}
+                                        {% for _ in category.parent.get_ancestors %}
+                                            &nbsp;&nbsp;&nbsp;&nbsp;
+                                        {% endfor %}
+                                        ↳ 
+                                    {% endif %}
+                                    {{ category.name }}
+                                </td>
+                                <td>{{ category.parent.name|default:"None" }}</td>
+                                <td>{{ category.products.count }}</td>
                                 <td>
                                     {% if category.is_active %}
                                         <span class="badge badge-success">Active</span>
@@ -71,7 +92,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-warning" onclick="openEditModal('{{ category.id }}', '{{ category.name }}')">Edit</button>
+                                    <button class="btn btn-sm btn-warning" onclick="openEditModal('{{ category.id }}', '{{ category.name }}', '{{ category.parent.id|default:"" }}')">Edit</button>
                                     {% if category.is_active %}
                                         <button class="btn btn-sm btn-error" onclick="disableCategory('{{ category.id }}')">Disable</button>
                                     {% else %}
@@ -110,6 +131,17 @@
                     </label>
                     <input type="text" id="editCategoryName" name="category_name" class="input input-bordered" required>
                 </div>
+                <div class="form-control mt-4">
+                    <label class="label">
+                        <span class="label-text">Parent Category (optional)</span>
+                    </label>
+                    <select id="editParentCategory" name="parent_category" class="select select-bordered">
+                        <option value="">None (Top-level category)</option>
+                        {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="modal-action">
                     <button type="submit" class="btn btn-primary">Save changes</button>
                     <button type="button" class="btn" onclick="closeEditModal()">Close</button>
@@ -134,9 +166,10 @@
     </div>
 
     <script>
-        function openEditModal(categoryId, categoryName) {
+        function openEditModal(categoryId, categoryName, parentCategoryId) {
             document.getElementById('editModal').classList.add('modal-open');
             document.getElementById('editCategoryName').value = categoryName;
+            document.getElementById('editParentCategory').value = parentCategoryId;
             document.getElementById('editForm').action = `/admin-dashboard/edit-category/${categoryId}/`;
         }
 

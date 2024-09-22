@@ -152,6 +152,24 @@
             color: #ff9ff3;
             padding-left: 5px;
         }
+        .subcategory-list {
+            list-style-type: none;
+            padding-left: 20px;
+            margin-top: 5px;
+        }
+        .subcategory-item {
+            margin-bottom: 5px;
+        }
+        .subcategory-link {
+            color: #e0e0e0;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+        .subcategory-link:hover {
+            color: #ff9ff3;
+            padding-left: 5px;
+        }
         #back-to-top {
             position: fixed;
             bottom: 20px;
@@ -200,11 +218,24 @@
                     <h4 class="sidebar-title"><i class="fas fa-list me-2"></i>Categories</h4>
                     <ul class="category-list">
                         {% for category in categories %}
-                            <li class="category-item">
-                                <a href="{% url 'products' %}?category={{ category.id }}" class="category-link">
-                                    <i class="fas fa-tag me-2"></i>{{ category.name }}
-                                </a>
-                            </li>
+                            {% if not category.parent %}
+                                <li class="category-item">
+                                    <a href="{% url 'products' %}?category={{ category.id }}" class="category-link">
+                                        <i class="fas fa-tag me-2"></i>{{ category.name }}
+                                    </a>
+                                    {% if category.subcategories.exists %}
+                                        <ul class="subcategory-list" style="display: none;">
+                                            {% for subcategory in category.subcategories.all %}
+                                                <li class="subcategory-item">
+                                                    <a href="{% url 'products' %}?category={{ subcategory.id }}" class="subcategory-link">
+                                                        <i class="fas fa-angle-right me-2"></i>{{ subcategory.name }}
+                                                    </a>
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% endif %}
+                                </li>
+                            {% endif %}
                         {% endfor %}
                     </ul>
                 </div>
@@ -248,7 +279,7 @@
                                             </figure>
                                             <div class="product-details">
                                                 <h5 class="product-title">{{ product.name }}</h5>
-                                                <p class="product-price">${{ product.price }}</p>
+                                                <p class="product-price">₹{{ product.price }}</p>
                                                 <div class="product-rating" data-reviews="{{ product.reviews_json }}">
                                                     <i class="fas fa-star"></i>
                                                     {% if product.reviews.count > 0 %}
@@ -278,6 +309,23 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const categoryItems = document.querySelectorAll('.category-item');
+            
+            categoryItems.forEach(item => {
+                const subcategoryList = item.querySelector('.subcategory-list');
+                if (subcategoryList) {
+                    item.addEventListener('mouseenter', () => {
+                        subcategoryList.style.display = 'block';
+                    });
+                    
+                    item.addEventListener('mouseleave', () => {
+                        subcategoryList.style.display = 'none';
+                    });
+                }
+            });
+        });
+        
         // Back to Top button functionality
         var btn = document.getElementById("back-to-top");
         window.onscroll = function() {scrollFunction()};
@@ -289,20 +337,29 @@
             }
         }
         
-        $(document).ready(function() {
+        // Replace jQuery ready function with vanilla JS
+        document.addEventListener('DOMContentLoaded', function() {
             sessionStorage.setItem('currentPage', 'products');
         });
+        
         document.addEventListener('DOMContentLoaded', function() {
             var productRatings = document.querySelectorAll('.product-rating');
             productRatings.forEach(function(rating) {
                 var ratingText = rating.textContent.trim();
                 if (ratingText.includes('reviews')) {
                     var reviews = JSON.parse(rating.dataset.reviews || '[]');
-                    var avgRating = window.django.avg(reviews, 'rating');
+                    var avgRating = calculateAverage(reviews, 'rating');
                     rating.textContent = ratingText.replace(/\(.*?\)/, '(' + avgRating.toFixed(1) + '/5)');
                 }
             });
         });
+        
+        // Helper function to calculate average
+        function calculateAverage(array, key) {
+            if (array.length === 0) return 0;
+            var sum = array.reduce((acc, curr) => acc + curr[key], 0);
+            return sum / array.length;
+        }
     </script>
 </body>
 </html>

@@ -58,12 +58,21 @@ class Artisan(models.Model):
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='subcategories')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)  # Add this line
 
     def __str__(self):
         return self.name
+    
+    def get_ancestors(self):
+        ancestors = []
+        parent = self.parent
+        while parent:
+            ancestors.append(parent)
+            parent = parent.parent
+        return ancestors
 
     class Meta:
         verbose_name_plural = "Categories"
@@ -185,7 +194,8 @@ class AuthenticityDocument(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='authenticity_documents')
     document = models.FileField(upload_to='authenticity_documents/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    is_verified = models.BooleanField(default=False)
+    
     def __str__(self):
         return f"Authenticity Document for {self.product.name}"
 
