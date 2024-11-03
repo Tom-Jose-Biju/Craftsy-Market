@@ -143,6 +143,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Add this line to disable oneDNN messages
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'   # Add this line to suppress most TF messages
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/

@@ -6,7 +6,7 @@ from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUpload
 from tensorflow.keras.applications.efficientnet import EfficientNetB0, preprocess_input, decode_predictions
 from tensorflow.keras.preprocessing import image
 import numpy as np
-import tensorflow as tf
+# import tensorflow as tf
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 import io
