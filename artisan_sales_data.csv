@@ -1,0 +1,251 @@
+date,artisan_id,product_id,product_name,category,quantity,price
+2024-07-03,3,2,Handwoven Rug,Accessories,5,27.63
+2024-07-03,5,4,Stained Glass Panel,Furniture,1,403.12
+2024-07-03,3,3,Artisan Mug,Pottery,5,469.94
+2024-07-03,1,1,Stained Glass Panel,Home Decor,4,13.76
+2024-07-04,9,1,Wooden Sculpture,Home Decor,4,88.48
+2024-07-04,4,4,Ceramic Vase,Pottery,1,413.9
+2024-07-05,1,7,Leather Wallet,Pottery,3,75.31
+2024-07-05,2,5,Leather Wallet,Art,3,298.66
+2024-07-06,10,1,Pottery Bowl,Home Decor,1,297.15
+2024-07-06,9,6,Leather Wallet,Home Decor,4,118.66
+2024-07-07,9,6,Leather Wallet,Home Decor,3,117.06
+2024-07-08,7,1,Embroidered Pillow,Textiles,5,260.22
+2024-07-08,9,3,Handmade Necklace,Textiles,3,320.09
+2024-07-08,4,3,Embroidered Pillow,Textiles,5,293.3
+2024-07-08,2,5,Leather Wallet,Art,4,323.33
+2024-07-08,5,7,Handmade Necklace,Art,3,142.42
+2024-07-08,1,8,Woven Basket,Home Decor,1,292.56
+2024-07-08,2,2,Leather Wallet,Home Decor,2,155.94
+2024-07-09,7,2,Handwoven Rug,Textiles,4,391.43
+2024-07-09,10,2,Ceramic Vase,Textiles,4,512.2
+2024-07-09,9,2,Woven Basket,Home Decor,4,23.94
+2024-07-09,2,4,Macrame Wall Hanging,Accessories,2,268.38
+2024-07-10,3,2,Handwoven Rug,Accessories,5,27.03
+2024-07-10,8,5,Leather Wallet,Textiles,2,82.61
+2024-07-10,4,3,Embroidered Pillow,Textiles,4,282.72
+2024-07-10,8,2,Macrame Wall Hanging,Accessories,4,298.31
+2024-07-10,7,2,Handwoven Rug,Textiles,4,407.92
+2024-07-11,1,4,Handmade Necklace,Pottery,3,384.61
+2024-07-11,5,5,Macrame Wall Hanging,Pottery,2,58.89
+2024-07-11,5,1,Artisan Mug,Home Decor,5,240.89
+2024-07-12,7,6,Ceramic Vase,Furniture,1,421.56
+2024-07-13,2,3,Painted Canvas,Jewelry,2,448.6
+2024-07-14,8,4,Carved Wooden Box,Textiles,1,441.72
+2024-07-14,2,4,Macrame Wall Hanging,Accessories,4,294.68
+2024-07-15,7,6,Ceramic Vase,Furniture,2,389.74
+2024-07-15,7,1,Embroidered Pillow,Textiles,4,257.2
+2024-07-16,3,4,Leather Wallet,Home Decor,1,498.57
+2024-07-16,6,1,Handmade Necklace,Jewelry,1,250.28
+2024-07-16,6,2,Leather Wallet,Pottery,1,215.72
+2024-07-17,7,4,Painted Canvas,Textiles,5,209.42
+2024-07-17,7,5,Handwoven Rug,Accessories,2,326.29
+2024-07-17,8,4,Carved Wooden Box,Textiles,2,440.13
+2024-07-17,8,6,Glass Ornament,Textiles,1,99.55
+2024-07-18,4,4,Ceramic Vase,Pottery,4,417.24
+2024-07-19,5,3,Carved Wooden Box,Home Decor,3,100.32
+2024-07-19,9,2,Woven Basket,Home Decor,4,24.31
+2024-07-20,9,6,Leather Wallet,Home Decor,4,118.52
+2024-07-20,1,8,Woven Basket,Home Decor,2,292.24
+2024-07-21,9,6,Leather Wallet,Home Decor,5,114.65
+2024-07-21,10,1,Pottery Bowl,Home Decor,1,308.61
+2024-07-22,5,4,Stained Glass Panel,Furniture,1,381.52
+2024-07-22,10,2,Ceramic Vase,Textiles,4,475.31
+2024-07-23,5,4,Stained Glass Panel,Furniture,3,411.96
+2024-07-23,4,1,Ceramic Vase,Furniture,1,448.04
+2024-07-24,4,1,Ceramic Vase,Furniture,1,443.29
+2024-07-25,9,4,Leather Wallet,Textiles,1,404.55
+2024-07-25,5,4,Stained Glass Panel,Furniture,2,401.08
+2024-07-25,7,7,Artisan Mug,Art,3,361.9
+2024-07-26,2,3,Painted Canvas,Jewelry,1,411.72
+2024-07-27,5,6,Handwoven Rug,Jewelry,3,460.22
+2024-07-27,9,1,Wooden Sculpture,Home Decor,1,83.45
+2024-07-27,4,3,Embroidered Pillow,Textiles,3,282.1
+2024-07-28,9,2,Woven Basket,Home Decor,4,24.98
+2024-07-28,5,3,Carved Wooden Box,Home Decor,4,97.37
+2024-07-28,5,6,Handwoven Rug,Jewelry,5,481.12
+2024-07-29,8,6,Glass Ornament,Textiles,1,104.33
+2024-07-29,5,7,Handmade Necklace,Art,1,144.63
+2024-07-29,4,5,Knitted Scarf,Accessories,4,224.62
+2024-07-30,6,2,Leather Wallet,Pottery,2,206.83
+2024-07-30,1,4,Handmade Necklace,Pottery,1,395.12
+2024-07-30,3,1,Stained Glass Panel,Textiles,2,21.9
+2024-07-30,1,7,Leather Wallet,Pottery,1,72.18
+2024-07-31,9,1,Wooden Sculpture,Home Decor,2,83.62
+2024-07-31,7,2,Handwoven Rug,Textiles,1,403.74
+2024-08-01,5,4,Stained Glass Panel,Furniture,5,379.45
+2024-08-01,8,5,Leather Wallet,Textiles,1,79.04
+2024-08-01,4,5,Knitted Scarf,Accessories,2,219.38
+2024-08-02,1,8,Woven Basket,Home Decor,3,305.31
+2024-08-02,8,4,Carved Wooden Box,Textiles,4,444.62
+2024-08-02,5,1,Artisan Mug,Home Decor,5,244.63
+2024-08-03,2,4,Macrame Wall Hanging,Accessories,5,269.17
+2024-08-04,3,2,Handwoven Rug,Accessories,5,28.43
+2024-08-04,10,3,Glass Ornament,Art,2,260.17
+2024-08-05,8,4,Carved Wooden Box,Textiles,3,452.65
+2024-08-05,1,5,Stained Glass Panel,Home Decor,3,227.41
+2024-08-06,1,8,Woven Basket,Home Decor,1,301.03
+2024-08-06,7,7,Artisan Mug,Art,3,365.79
+2024-08-06,9,3,Handmade Necklace,Textiles,2,315.99
+2024-08-07,5,6,Handwoven Rug,Jewelry,4,461.29
+2024-08-08,2,6,Stained Glass Panel,Textiles,1,395.83
+2024-08-08,10,2,Ceramic Vase,Textiles,3,492.07
+2024-08-08,9,4,Leather Wallet,Textiles,2,423.66
+2024-08-08,2,4,Macrame Wall Hanging,Accessories,1,281.38
+2024-08-08,1,6,Wooden Sculpture,Home Decor,4,422.36
+2024-08-09,10,1,Pottery Bowl,Home Decor,1,303.36
+2024-08-10,2,2,Leather Wallet,Home Decor,4,168.73
+2024-08-11,3,2,Handwoven Rug,Accessories,1,27.58
+2024-08-11,1,3,Macrame Wall Hanging,Textiles,5,486.94
+2024-08-11,1,7,Leather Wallet,Pottery,3,73.41
+2024-08-11,8,3,Artisan Mug,Art,2,111.09
+2024-08-11,6,3,Painted Canvas,Home Decor,2,69.56
+2024-08-11,8,1,Embroidered Pillow,Textiles,2,246.09
+2024-08-12,2,1,Wooden Sculpture,Textiles,3,385.77
+2024-08-12,1,1,Stained Glass Panel,Home Decor,1,13.09
+2024-08-13,1,1,Stained Glass Panel,Home Decor,2,13.65
+2024-08-13,1,3,Macrame Wall Hanging,Textiles,2,465.95
+2024-08-13,9,3,Handmade Necklace,Textiles,1,305.94
+2024-08-14,5,7,Handmade Necklace,Art,1,137.72
+2024-08-15,5,3,Carved Wooden Box,Home Decor,4,97.43
+2024-08-15,7,1,Embroidered Pillow,Textiles,2,267.18
+2024-08-15,1,4,Handmade Necklace,Pottery,4,362.85
+2024-08-15,3,2,Handwoven Rug,Accessories,3,26.75
+2024-08-16,10,3,Glass Ornament,Art,4,249.6
+2024-08-18,2,2,Leather Wallet,Home Decor,2,169.4
+2024-08-18,5,1,Artisan Mug,Home Decor,4,245.01
+2024-08-18,9,6,Leather Wallet,Home Decor,3,119.27
+2024-08-19,8,2,Macrame Wall Hanging,Accessories,3,293.23
+2024-08-19,7,4,Painted Canvas,Textiles,2,205.12
+2024-08-20,5,7,Handmade Necklace,Art,5,135.49
+2024-08-20,8,3,Artisan Mug,Art,3,106.11
+2024-08-20,3,1,Stained Glass Panel,Textiles,1,22.31
+2024-08-20,1,8,Woven Basket,Home Decor,3,305.99
+2024-08-20,9,4,Leather Wallet,Textiles,2,404.7
+2024-08-21,9,2,Woven Basket,Home Decor,2,25.59
+2024-08-21,5,6,Handwoven Rug,Jewelry,3,461.67
+2024-08-21,3,4,Leather Wallet,Home Decor,5,459.88
+2024-08-21,8,5,Leather Wallet,Textiles,5,82.74
+2024-08-21,4,5,Knitted Scarf,Accessories,3,211.44
+2024-08-21,4,3,Embroidered Pillow,Textiles,4,289.03
+2024-08-22,7,1,Embroidered Pillow,Textiles,3,248.08
+2024-08-22,8,4,Carved Wooden Box,Textiles,3,472.44
+2024-08-22,10,1,Pottery Bowl,Home Decor,2,303.67
+2024-08-23,9,1,Wooden Sculpture,Home Decor,3,86.8
+2024-08-23,1,4,Handmade Necklace,Pottery,5,378.69
+2024-08-23,3,1,Stained Glass Panel,Textiles,2,21.39
+2024-08-23,9,3,Handmade Necklace,Textiles,1,296.22
+2024-08-23,7,3,Handwoven Rug,Art,5,233.53
+2024-08-24,2,3,Painted Canvas,Jewelry,1,418.91
+2024-08-24,4,5,Knitted Scarf,Accessories,2,222.41
+2024-08-24,2,5,Leather Wallet,Art,5,315.13
+2024-08-25,9,4,Leather Wallet,Textiles,4,402.95
+2024-08-25,6,2,Leather Wallet,Pottery,2,199.53
+2024-08-25,5,2,Macrame Wall Hanging,Jewelry,3,88.4
+2024-08-25,9,6,Leather Wallet,Home Decor,3,122.65
+2024-08-26,6,1,Handmade Necklace,Jewelry,2,230.23
+2024-08-26,3,3,Artisan Mug,Pottery,5,498.48
+2024-08-26,4,5,Knitted Scarf,Accessories,4,210.09
+2024-08-27,8,3,Artisan Mug,Art,4,114.5
+2024-08-27,6,1,Handmade Necklace,Jewelry,5,234.52
+2024-08-28,1,8,Woven Basket,Home Decor,5,285.04
+2024-08-28,7,1,Embroidered Pillow,Textiles,1,268.37
+2024-08-29,7,6,Ceramic Vase,Furniture,5,394.52
+2024-08-29,10,2,Ceramic Vase,Textiles,4,489.89
+2024-08-30,4,4,Ceramic Vase,Pottery,2,435.93
+2024-08-30,4,2,Carved Wooden Box,Art,1,313.79
+2024-08-30,2,1,Wooden Sculpture,Textiles,2,424.4
+2024-08-30,6,3,Painted Canvas,Home Decor,3,73.34
+2024-08-31,1,8,Woven Basket,Home Decor,5,309.95
+2024-09-01,2,1,Wooden Sculpture,Textiles,5,385.8
+2024-09-01,3,4,Leather Wallet,Home Decor,1,457.99
+2024-09-01,4,4,Ceramic Vase,Pottery,5,422.46
+2024-09-02,2,3,Painted Canvas,Jewelry,1,439.11
+2024-09-03,5,4,Stained Glass Panel,Furniture,1,381.25
+2024-09-03,1,3,Macrame Wall Hanging,Textiles,4,479.58
+2024-09-04,9,5,Pottery Bowl,Art,3,33.68
+2024-09-04,4,4,Ceramic Vase,Pottery,5,421.95
+2024-09-04,10,2,Ceramic Vase,Textiles,2,483.28
+2024-09-05,6,3,Painted Canvas,Home Decor,1,68.13
+2024-09-05,5,5,Macrame Wall Hanging,Pottery,2,62.68
+2024-09-05,7,3,Handwoven Rug,Art,5,222.97
+2024-09-05,3,4,Leather Wallet,Home Decor,5,476.81
+2024-09-05,9,1,Wooden Sculpture,Home Decor,3,88.86
+2024-09-06,8,2,Macrame Wall Hanging,Accessories,4,306.13
+2024-09-06,7,4,Painted Canvas,Textiles,5,219.56
+2024-09-07,4,5,Knitted Scarf,Accessories,1,206.79
+2024-09-07,3,2,Handwoven Rug,Accessories,3,27.07
+2024-09-07,9,1,Wooden Sculpture,Home Decor,4,81.61
+2024-09-07,1,1,Stained Glass Panel,Home Decor,2,12.67
+2024-09-07,9,3,Handmade Necklace,Textiles,2,296.7
+2024-09-08,3,3,Artisan Mug,Pottery,5,464.85
+2024-09-08,4,4,Ceramic Vase,Pottery,5,405.14
+2024-09-08,5,7,Handmade Necklace,Art,1,144.82
+2024-09-08,1,8,Woven Basket,Home Decor,5,308.33
+2024-09-09,2,3,Painted Canvas,Jewelry,2,412.92
+2024-09-09,5,3,Carved Wooden Box,Home Decor,1,92.31
+2024-09-09,7,2,Handwoven Rug,Textiles,1,402.46
+2024-09-09,8,4,Carved Wooden Box,Textiles,5,444.87
+2024-09-10,1,3,Macrame Wall Hanging,Textiles,3,454.88
+2024-09-10,7,7,Artisan Mug,Art,5,362.35
+2024-09-10,1,5,Stained Glass Panel,Home Decor,4,226.7
+2024-09-10,3,3,Artisan Mug,Pottery,1,475.46
+2024-09-11,9,2,Woven Basket,Home Decor,5,25.52
+2024-09-11,7,2,Handwoven Rug,Textiles,4,424.51
+2024-09-11,3,4,Leather Wallet,Home Decor,2,495.3
+2024-09-11,9,4,Leather Wallet,Textiles,4,436.11
+2024-09-12,1,2,Painted Canvas,Pottery,2,254.83
+2024-09-12,7,2,Handwoven Rug,Textiles,2,408.68
+2024-09-13,5,4,Stained Glass Panel,Furniture,1,400.78
+2024-09-13,4,3,Embroidered Pillow,Textiles,2,288.89
+2024-09-13,8,4,Carved Wooden Box,Textiles,2,467.8
+2024-09-14,7,5,Handwoven Rug,Accessories,1,326.61
+2024-09-15,2,2,Leather Wallet,Home Decor,1,156.15
+2024-09-16,8,6,Glass Ornament,Textiles,3,105.54
+2024-09-17,6,1,Handmade Necklace,Jewelry,3,243.54
+2024-09-17,5,4,Stained Glass Panel,Furniture,5,382.37
+2024-09-17,4,2,Carved Wooden Box,Art,3,318.23
+2024-09-17,3,2,Handwoven Rug,Accessories,5,27.24
+2024-09-17,5,7,Handmade Necklace,Art,3,136.66
+2024-09-18,7,1,Embroidered Pillow,Textiles,5,252.24
+2024-09-18,5,6,Handwoven Rug,Jewelry,2,484.86
+2024-09-18,9,4,Leather Wallet,Textiles,4,441.06
+2024-09-18,10,2,Ceramic Vase,Textiles,4,508.3
+2024-09-18,6,3,Painted Canvas,Home Decor,2,69.63
+2024-09-19,5,1,Artisan Mug,Home Decor,4,232.11
+2024-09-20,6,1,Handmade Necklace,Jewelry,3,241.85
+2024-09-20,6,2,Leather Wallet,Pottery,5,218.32
+2024-09-20,7,4,Painted Canvas,Textiles,4,209.79
+2024-09-20,4,2,Carved Wooden Box,Art,1,307.55
+2024-09-21,5,2,Macrame Wall Hanging,Jewelry,4,96.16
+2024-09-21,10,1,Pottery Bowl,Home Decor,5,298.68
+2024-09-21,5,4,Stained Glass Panel,Furniture,5,385.75
+2024-09-22,9,3,Handmade Necklace,Textiles,5,318.41
+2024-09-23,1,2,Painted Canvas,Pottery,3,249.31
+2024-09-23,1,4,Handmade Necklace,Pottery,4,393.87
+2024-09-23,2,2,Leather Wallet,Home Decor,3,155.85
+2024-09-23,5,7,Handmade Necklace,Art,5,140.14
+2024-09-23,8,6,Glass Ornament,Textiles,2,98.96
+2024-09-24,5,6,Handwoven Rug,Jewelry,1,477.03
+2024-09-24,3,3,Artisan Mug,Pottery,5,486.39
+2024-09-24,4,5,Knitted Scarf,Accessories,5,219.64
+2024-09-24,1,7,Leather Wallet,Pottery,4,70.28
+2024-09-25,3,4,Leather Wallet,Home Decor,4,483.31
+2024-09-25,7,4,Painted Canvas,Textiles,2,211.11
+2024-09-25,6,2,Leather Wallet,Pottery,3,214.37
+2024-09-25,5,3,Carved Wooden Box,Home Decor,4,96.94
+2024-09-26,7,2,Handwoven Rug,Textiles,4,404.27
+2024-09-26,10,2,Ceramic Vase,Textiles,4,483.74
+2024-09-27,4,1,Ceramic Vase,Furniture,3,418.51
+2024-09-27,2,3,Painted Canvas,Jewelry,3,449.56
+2024-09-27,10,3,Glass Ornament,Art,5,263.67
+2024-09-28,3,2,Handwoven Rug,Accessories,4,26.99
+2024-09-28,4,2,Carved Wooden Box,Art,1,309.33
+2024-09-28,5,6,Handwoven Rug,Jewelry,5,460.23
+2024-09-28,8,6,Glass Ornament,Textiles,3,97.36
+2024-09-29,1,2,Painted Canvas,Pottery,2,240.79
+2024-09-29,8,4,Carved Wooden Box,Textiles,2,453.91
+2024-09-29,9,6,Leather Wallet,Home Decor,3,115.93
+2024-09-30,7,7,Artisan Mug,Art,2,339.98
+2024-10-01,10,1,Pottery Bowl,Home Decor,2,311.85
+2024-10-01,1,8,Woven Basket,Home Decor,4,304.47

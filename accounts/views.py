@@ -49,13 +49,16 @@ from reportlab.lib.units import inch
 from .models import ChatMessage
 from django.views.decorators.csrf import csrf_exempt
 import os
-import tensorflow as tf
+# import tensorflow as tf
 from datetime import timedelta
 import base64
 import matplotlib.pyplot as plt
 from django.http import FileResponse
 from .models import AuthenticityDocument
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.files.storage import default_storage
+import tempfile
+import json 
 
 
 
@@ -301,8 +304,12 @@ def admin_add_category(request):
             if is_subcategory and not parent:
                 messages.error(request, "Please select a parent category for the subcategory.")
             else:
-                Category.objects.create(name=category_name, parent=parent)
-                messages.success(request, f"{'Subcategory' if is_subcategory else 'Category'} '{category_name}' has been added successfully.")
+                # Check if a category with this name already exists
+                if Category.objects.filter(name=category_name).exists():
+                    messages.error(request, f"A category with the name '{category_name}' already exists.")
+                else:
+                    Category.objects.create(name=category_name, parent=parent)
+                    messages.success(request, f"{'Subcategory' if is_subcategory else 'Category'} '{category_name}' has been added successfully.")
             return redirect('admin_add_category')
         else:
             messages.error(request, "Category name cannot be empty.")
@@ -544,6 +551,7 @@ def artisan_products_view(request, artisan_id):
     
 @login_required
 @login_required
+@login_required
 def artisan_products(request):
     if request.user.user_type != 'artisan':
         messages.error(request, "You don't have access to this page.")
@@ -562,10 +570,10 @@ def artisan_products(request):
     if selected_category:
         products = products.filter(category__id=selected_category)
     
-    # Get top selling products
+    # Get top selling products (only active ones)
     top_selling_products = Product.objects.filter(artisan=artisan, is_active=True).annotate(
         sales_count=Count('orderitem')
-    ).order_by('-sales_count')[:3]  # Change 3 to the number of top products you want to display
+    ).order_by('-sales_count')[:3]
     
     context = {
         'products': products,
@@ -819,7 +827,7 @@ def wishlist(request):
 @require_POST
 def single_product_checkout(request, product_id):
     product = get_object_or_404(Product, id=product_id)
-    quantity = 1  # For single product checkout, we assume quantity is 1
+    quantity = int(request.POST.get('quantity', 1))  # Get quantity from POST data
 
     gst_rate = Decimal(str(settings.GST_RATE))
     base_price = product.price
@@ -862,19 +870,120 @@ def add_to_cart(request):
         
         product = get_object_or_404(Product, id=product_id)
         
-        cart, created = Cart.objects.get_or_create(user=request.user)
-        cart_item, item_created = CartItem.objects.get_or_create(cart=cart, product=product)
+        if product.inventory < quantity:
+            return JsonResponse({'success': False, 'error': 'Not enough inventory'})
         
-        if item_created:
-            cart_item.quantity = quantity
+        if request.user.is_authenticated:
+            cart, created = Cart.objects.get_or_create(user=request.user)
+            cart_item, item_created = CartItem.objects.get_or_create(cart=cart, product=product)
+            
+            if item_created:
+                cart_item.quantity = quantity
+            else:
+                cart_item.quantity += quantity
+            
+            cart_item.save()
         else:
-            cart_item.quantity += quantity
+            cart = request.session.get('cart', {})
+            cart[product_id] = cart.get(product_id, 0) + quantity
+            request.session['cart'] = cart
         
-        cart_item.save()
+        # Update the product inventory
+        product.inventory -= quantity
+        product.save()
         
-        return JsonResponse({'success': True})
+        return JsonResponse({
+            'success': True,
+            'new_inventory': product.inventory
+        })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+@require_POST
+def remove_from_cart(request):
+    product_id = request.POST.get('product_id')
+    
+    if request.user.is_authenticated:
+        cart = Cart.objects.get(user=request.user)
+        try:
+            cart_item = CartItem.objects.get(cart=cart, product_id=product_id)
+            product = cart_item.product
+            product.inventory += cart_item.quantity
+            product.save()
+            cart_item.delete()
+        except CartItem.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Product not in cart'})
+    else:
+        cart = request.session.get('cart', {})
+        if str(product_id) in cart:
+            product = get_object_or_404(Product, id=product_id)
+            product.inventory += cart[str(product_id)]
+            product.save()
+            del cart[str(product_id)]
+            request.session['cart'] = cart
+    
+    return JsonResponse({'success': True, 'new_inventory': product.inventory})
+
+@require_POST
+def update_cart_quantity(request):
+    product_id = request.POST.get('product_id')
+    new_quantity = int(request.POST.get('quantity', 1))
+    
+    product = get_object_or_404(Product, id=product_id)
+    
+    if request.user.is_authenticated:
+        cart, created = Cart.objects.get_or_create(user=request.user)
+        try:
+            cart_item = CartItem.objects.get(cart=cart, product=product)
+            quantity_difference = new_quantity - cart_item.quantity
+            
+            if product.inventory < quantity_difference:
+                return JsonResponse({'success': False, 'error': 'Not enough inventory'})
+            
+            if new_quantity > 0:
+                cart_item.quantity = new_quantity
+                cart_item.save()
+            else:
+                cart_item.delete()
+            
+            product.inventory -= quantity_difference
+            product.save()
+        except CartItem.DoesNotExist:
+            if new_quantity > 0:
+                if product.inventory < new_quantity:
+                    return JsonResponse({'success': False, 'error': 'Not enough inventory'})
+                CartItem.objects.create(cart=cart, product=product, quantity=new_quantity)
+                product.inventory -= new_quantity
+                product.save()
+            else:
+                return JsonResponse({'success': False, 'error': 'Product not in cart'})
+    else:
+        cart = request.session.get('cart', {})
+        if str(product_id) in cart:
+            quantity_difference = new_quantity - cart[str(product_id)]
+            if product.inventory < quantity_difference:
+                return JsonResponse({'success': False, 'error': 'Not enough inventory'})
+            
+            if new_quantity > 0:
+                cart[str(product_id)] = new_quantity
+            else:
+                del cart[str(product_id)]
+            
+            request.session['cart'] = cart
+            product.inventory -= quantity_difference
+            product.save()
+        else:
+            if new_quantity > 0:
+                if product.inventory < new_quantity:
+                    return JsonResponse({'success': False, 'error': 'Not enough inventory'})
+                cart[str(product_id)] = new_quantity
+                request.session['cart'] = cart
+                product.inventory -= new_quantity
+                product.save()
+            else:
+                return JsonResponse({'success': False, 'error': 'Product not in cart'})
+    
+    return JsonResponse({'success': True, 'new_inventory': product.inventory})
 
 
 @login_required
@@ -915,53 +1024,6 @@ def get_cart(request):
         'total': float(total),
     })
 
-@login_required
-@require_POST
-def remove_from_cart(request):
-    product_id = request.POST.get('product_id')
-    
-    if request.user.is_authenticated:
-        cart = Cart.objects.get(user=request.user)
-        CartItem.objects.filter(cart=cart, product_id=product_id).delete()
-    else:
-        cart = request.session.get('cart', {})
-        if product_id in cart:
-            del cart[product_id]
-            request.session['cart'] = cart
-            request.session.modified = True
-    
-    return JsonResponse({'success': True})
-
-@login_required
-@require_POST
-def update_cart_quantity(request):
-    product_id = request.POST.get('product_id')
-    quantity = int(request.POST.get('quantity', 1))
-    
-    if request.user.is_authenticated:
-        cart = Cart.objects.get(user=request.user)
-        try:
-            cart_item = CartItem.objects.get(cart=cart, product_id=product_id)
-            if quantity > 0:
-                cart_item.quantity = quantity
-                cart_item.save()
-            else:
-                cart_item.delete()
-        except CartItem.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Product not in cart'})
-    else:
-        cart = request.session.get('cart', {})
-        if product_id in cart:
-            if quantity > 0:
-                cart[product_id] = quantity
-            else:
-                del cart[product_id]
-            request.session['cart'] = cart
-            request.session.modified = True
-        else:
-            return JsonResponse({'success': False, 'error': 'Product not in cart'})
-    
-    return JsonResponse({'success': True})
 
 @login_required
 @require_POST
@@ -1596,9 +1658,66 @@ def simulate_delivery(request, order_id):
     return redirect('order_detail', order_id=order.id)
 
 
-import logging
+# import logging
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
+
+# @ensure_csrf_cookie
+# @login_required
+# def classify_image(request):
+#     if request.method == 'POST' and request.FILES.get('image'):
+#         image_file = request.FILES['image']
+#         try:
+#             from PIL import Image
+#             import numpy as np
+
+#             # Load the custom trained model
+#             model_path = os.path.join(settings.BASE_DIR, 'custom_efficientnet_model.h5')
+#             if not os.path.exists(model_path):
+#                 return JsonResponse({'success': False, 'message': 'Model file not found. Please train the model first.'})
+            
+#             model = tf.keras.models.load_model(model_path)
+
+#             # Process the image
+#             img = Image.open(image_file).convert('RGB')
+#             img = img.resize((224, 224))  # Resize to match the input size used during training
+#             img_array = np.array(img)
+#             img_array = np.expand_dims(img_array, 0)
+#             img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
+
+#             # Make prediction
+#             predictions = model.predict(img_array)
+#             predicted_class_index = tf.argmax(predictions[0]).numpy()
+
+#             # Get category name and ID
+#             categories = dict(Product.CATEGORY_CHOICES)
+#             category_name = list(categories.values())[predicted_class_index]
+#             category_id = list(categories.keys())[predicted_class_index]
+
+#             # Get confidence score
+#             confidence = float(predictions[0][predicted_class_index])
+
+#             return JsonResponse({
+#                 'success': True, 
+#                 'category': category_name, 
+#                 'category_id': category_id,
+#                 'confidence': confidence
+#             })
+#         except ImportError as e:
+#             return JsonResponse({'success': False, 'message': f"Error importing required modules: {str(e)}"})
+#         except (IOError, OSError) as e:
+#             return JsonResponse({'success': False, 'message': f"Error processing image: {str(e)}"})
+#         except Exception as e:
+#             return JsonResponse({'success': False, 'message': f"Unexpected error: {str(e)}"})
+#     return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+from django.core.files.base import ContentFile
+from PIL import Image
+import numpy as np
+import io
+from transformers import ViTImageProcessor, ViTForImageClassification
+import torch
+
 
 @ensure_csrf_cookie
 @login_required
@@ -1606,47 +1725,145 @@ def classify_image(request):
     if request.method == 'POST' and request.FILES.get('image'):
         image_file = request.FILES['image']
         try:
-            from PIL import Image
-            import numpy as np
-
-            # Load the custom trained model
-            model_path = os.path.join(settings.BASE_DIR, 'custom_efficientnet_model.h5')
-            if not os.path.exists(model_path):
-                return JsonResponse({'success': False, 'message': 'Model file not found. Please train the model first.'})
+            # Save the uploaded file temporarily
+            temp_path = default_storage.save('temp_image.jpg', ContentFile(image_file.read()))
             
-            model = tf.keras.models.load_model(model_path)
-
+            # Load the ViT model and processor
+            processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224')
+            model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
+            
             # Process the image
-            img = Image.open(image_file).convert('RGB')
-            img = img.resize((224, 224))  # Resize to match the input size used during training
-            img_array = np.array(img)
-            img_array = np.expand_dims(img_array, 0)
-            img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
-
-            # Make prediction
-            predictions = model.predict(img_array)
-            predicted_class_index = tf.argmax(predictions[0]).numpy()
-
-            # Get category name and ID
-            categories = dict(Product.CATEGORY_CHOICES)
-            category_name = list(categories.values())[predicted_class_index]
-            category_id = list(categories.keys())[predicted_class_index]
-
-            # Get confidence score
-            confidence = float(predictions[0][predicted_class_index])
-
+            with default_storage.open(temp_path) as f:
+                img = Image.open(io.BytesIO(f.read())).convert('RGB')
+            
+            # Prepare the image for the model
+            inputs = processor(images=img, return_tensors="pt")
+            
+            # Get model predictions
+            with torch.no_grad():
+                outputs = model(**inputs)
+                logits = outputs.logits
+                predicted_class_idx = logits.argmax(-1).item()
+            
+            # Map ImageNet classes to your product categories
+            category_mapping = {
+                'pottery': [
+                    'vase', 'pot', 'ceramic', 'earthenware', 'clay', 'porcelain', 'stoneware', 
+                    'bowl', 'pitcher', 'planter', 'terracotta', 'pottery wheel', 'glazed', 
+                    'ceramic art', 'pottery craft', 'handmade pottery', 'ceramic vessel'
+                ],
+                'jewelry': [
+                    'necklace', 'bracelet', 'ring', 'jewel', 'pendant', 'earring', 'gemstone',
+                    'beaded', 'silver', 'gold', 'precious stone', 'chain', 'anklet', 'brooch',
+                    'jewelry box', 'ornament', 'pearl', 'diamond', 'handcrafted jewelry'
+                ],
+                'textiles': [
+                    'quilt', 'fabric', 'cloth', 'textile', 'woven', 'embroidery', 'tapestry',
+                    'silk', 'cotton', 'wool', 'knitted', 'crochet', 'needlework', 'weaving',
+                    'batik', 'tie-dye', 'handloom', 'textile art', 'fabric craft'
+                ],
+                'woodwork': [
+                    'wooden', 'furniture', 'cabinet', 'chair', 'carved', 'carpentry', 'timber',
+                    'woodcraft', 'wood carving', 'table', 'shelf', 'hardwood', 'woodworking',
+                    'wooden box', 'wood art', 'wooden craft', 'wood turning', 'wooden decor'
+                ],
+                'paintings': [
+                    'art', 'painting', 'canvas', 'artwork', 'oil painting', 'acrylic', 'watercolor',
+                    'portrait', 'landscape', 'abstract', 'wall art', 'painted', 'artistic',
+                    'brushwork', 'fine art', 'contemporary art', 'modern art', 'traditional painting'
+                ],
+                'sculptures': [
+                    'sculpture', 'statue', 'carving', 'figurine', 'bust', '3D art', 'carved figure',
+                    'stone sculpture', 'bronze sculpture', 'modern sculpture', 'abstract sculpture',
+                    'decorative sculpture', 'garden statue', 'sculptural art', 'relief sculpture'
+                ],
+                'metalwork': [
+                    'metal', 'bronze', 'iron', 'steel', 'copper', 'brass', 'silverwork',
+                    'metalcraft', 'wrought iron', 'metal art', 'forged metal', 'metal sculpture',
+                    'decorative metal', 'metal jewelry', 'metalworking', 'hammered metal'
+                ],
+                'glasswork': [
+                    'glass', 'crystal', 'transparent', 'blown glass', 'stained glass', 'glass art',
+                    'glass sculpture', 'decorative glass', 'glass vase', 'glass bowl', 'glassware',
+                    'fused glass', 'glass bead', 'glass mosaic', 'art glass', 'glass craft'
+                ],
+                'leatherwork': [
+                    'leather', 'bag', 'wallet', 'belt', 'leather craft', 'leather goods',
+                    'leather accessory', 'leather purse', 'leather pouch', 'leather journal',
+                    'leather case', 'tooled leather', 'leather work', 'handmade leather'
+                ],
+                'candles': [
+                    'candle', 'wax', 'scented candle', 'pillar candle', 'taper candle', 
+                    'votive candle', 'soy candle', 'beeswax candle', 'decorative candle',
+                    'aromatherapy candle', 'handmade candle', 'candle holder', 'jar candle',
+                    'floating candle', 'tea light', 'scented wax', 'candle making'
+                ],
+                'action_figures': [
+                    # Popular Franchises
+                    'marvel figure', 'dc figure', 'star wars figure', 'anime figure','batman',
+                    'dragon ball figure', 'pokemon figure', 'gundam model', 'transformers figure',
+                    
+                    # Figure Types
+                    'action figure', 'collectible figure', 'statue figure', 'scale figure',
+                    'poseable figure', 'articulated figure', 'display figure', 'limited edition figure',
+                    
+                    # Materials and Features
+                    'plastic figure', 'resin figure', 'vinyl figure', 'die-cast figure',
+                    'painted figure', 'detailed figure', 'movable joints', 'accessories',
+                    
+                    # Characters and Themes
+                    'superhero', 'robot', 'mecha', 'character', 'warrior', 'monster',
+                    'comic book character', 'movie character', 'game character',
+                    
+                    # Collections and Display
+                    'collectible', 'action toy', 'display piece', 'figurine', 'model kit',
+                    'diorama', 'collection item', 'boxed figure', 'mint condition'
+                ],
+                'handicrafts': [
+                    'handmade', 'craft', 'ornament', 'decoration', 'artisan craft', 'folk art',
+                    'handcrafted', 'traditional craft', 'decorative art', 'craft supply',
+                    'handmade decor', 'artistic craft', 'craft work', 'handmade gift',
+                    'craft project', 'DIY craft', 'handmade item', 'craft material'
+                ]
+            }
+            
+            # Get the predicted ImageNet class
+            predicted_class = model.config.id2label[predicted_class_idx]
+            
+            # Map to your category
+            matched_category = None
+            confidence = float(logits.softmax(dim=-1)[0][predicted_class_idx])
+            
+            for category, keywords in category_mapping.items():
+                if any(keyword.lower() in predicted_class.lower() for keyword in keywords):
+                    matched_category = category
+                    break
+            
+            if not matched_category:
+                matched_category = 'handicrafts'  # Default category
+            
+            # Get category ID from your Product model
+            categories = Category.objects.all()
+            category_obj = categories.filter(name__iexact=matched_category).first()
+            
+            if not category_obj:
+                category_obj = categories.first()  # Fallback to first category
+            
             return JsonResponse({
-                'success': True, 
-                'category': category_name, 
-                'category_id': category_id,
-                'confidence': confidence
+                'success': True,
+                'category': category_obj.name,
+                'category_id': category_obj.id,
+                'confidence': confidence,
+                'predicted_class': predicted_class  # Original ImageNet class for reference
             })
-        except ImportError as e:
-            return JsonResponse({'success': False, 'message': f"Error importing required modules: {str(e)}"})
-        except (IOError, OSError) as e:
-            return JsonResponse({'success': False, 'message': f"Error processing image: {str(e)}"})
+            
         except Exception as e:
-            return JsonResponse({'success': False, 'message': f"Unexpected error: {str(e)}"})
+            return JsonResponse({'success': False, 'message': f"Error: {str(e)}"})
+        finally:
+            # Clean up the temporary file
+            if 'temp_path' in locals():
+                default_storage.delete(temp_path)
+                
     return JsonResponse({'success': False, 'message': 'Invalid request'})
 
 @login_required
@@ -1822,45 +2039,58 @@ def chat_room(request, room_name):
 
 @login_required
 def get_messages(request, room_name):
-    last_id = int(request.GET.get('last_id', 0))
-    messages = ChatMessage.objects.filter(thread_name=room_name, id__gt=last_id).order_by('timestamp')
-    return JsonResponse({
-        'messages': [
-            {
-                'id': msg.id,
-                'username': msg.user.username,
-                'message': msg.message,
-                'timestamp': msg.timestamp.isoformat(),
-                'user_type': msg.user.user_type
-            }
-            for msg in messages
-        ]
-    })
+    try:
+        last_id = int(request.GET.get('last_id', 0))
+        messages = ChatMessage.objects.filter(thread_name=room_name, id__gt=last_id).order_by('timestamp')
+        return JsonResponse({
+            'success': True,
+            'messages': [
+                {
+                    'id': msg.id,
+                    'username': msg.user.username,
+                    'message': msg.message,
+                    'timestamp': msg.timestamp.isoformat(),
+                    'user_type': msg.user.user_type
+                }
+                for msg in messages
+            ]
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
 @csrf_exempt
 def send_message(request, room_name):
     if request.method == 'POST':
-        message = request.POST.get('message')
-        new_message = ChatMessage.objects.create(
-            user=request.user,
-            thread_name=room_name,
-            message=message,
-            timestamp=timezone.now()
-        )
-        return JsonResponse({
-            'status': 'ok',
-            'id': new_message.id,
-            'timestamp': new_message.timestamp.isoformat(),
-            'user_type': request.user.user_type
-        })
-    return JsonResponse({'status': 'error'}, status=400)
+        try:
+            message = request.POST.get('message')
+            if not message:
+                return JsonResponse({'success': False, 'error': 'Message content is required.'}, status=400)
+            
+            new_message = ChatMessage.objects.create(
+                user=request.user,
+                thread_name=room_name,
+                message=message,
+                timestamp=timezone.now()
+            )
+            return JsonResponse({
+                'success': True,
+                'id': new_message.id,
+                'timestamp': new_message.timestamp.isoformat(),
+                'user_type': request.user.user_type
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    return JsonResponse({'success': False, 'error': 'Invalid request method.'}, status=405)
 
 @login_required
 @require_POST
 def clear_chat(request, room_name):
-    ChatMessage.objects.filter(thread_name=room_name).delete()
-    return JsonResponse({'status': 'ok'})
+    try:
+        ChatMessage.objects.filter(thread_name=room_name).delete()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
 def download_invoice(request, order_id):
@@ -1984,3 +2214,99 @@ def handle_authenticity_document(request, document_id, action):
         return JsonResponse({'success': True, 'message': message})
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+from django.db.models.functions import TruncDate
+import pandas as pd
+from prophet import Prophet
+import csv
+import plotly.graph_objects as go
+import plotly.express as px
+
+@login_required
+def sales_forecast(request, artisan_id):
+    # Read the CSV file
+    csv_file_path = 'artisan_sales_data.csv'
+    df = pd.read_csv(csv_file_path)
+    
+    # Filter data for the specific artisan
+    df = df[df['artisan_id'] == artisan_id]
+    
+    if df.empty:
+        context = {
+            'error_message': "No sales data available for forecasting.",
+        }
+        return render(request, 'sales_forecast.html', context)
+
+    # Prepare data for charts
+    df['date'] = pd.to_datetime(df['date'])
+    df['total_sales'] = df['quantity'] * df['price']
+    
+    # Convert USD to INR (assuming 1 USD = 75 INR)
+    usd_to_inr = 75
+    df['total_sales_inr'] = df['total_sales'] * usd_to_inr
+
+    # Stacked area chart for product categories
+    category_sales = df.groupby(['date', 'category'])['total_sales_inr'].sum().unstack()
+    fig_stacked = px.area(category_sales, x=category_sales.index, y=category_sales.columns,
+                          title='Sales by Product Category (INR)')
+    chart_stacked = fig_stacked.to_html(full_html=False)
+
+    # Heatmap for daily sales
+    daily_sales = df.groupby('date')['total_sales_inr'].sum().reset_index()
+    daily_sales['weekday'] = daily_sales['date'].dt.weekday
+    daily_sales['week'] = daily_sales['date'].dt.isocalendar().week
+    pivot_sales = daily_sales.pivot(index='week', columns='weekday', values='total_sales_inr')
+    fig_heatmap = px.imshow(pivot_sales, labels=dict(x="Day of Week", y="Week", color="Sales (INR)"),
+                            x=['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                            title='Daily Sales Heatmap (INR)')
+    chart_heatmap = fig_heatmap.to_html(full_html=False)
+
+    # Top selling products
+    top_products = df.groupby('product_name')['quantity'].sum().sort_values(ascending=False).head(5)
+
+    # Summary statistics
+    total_sales = df['total_sales_inr'].sum()
+    total_orders = df['quantity'].sum()
+    avg_order_value = total_sales / total_orders if total_orders > 0 else 0
+
+    # Growth insights
+    last_month = df[df['date'] >= df['date'].max() - pd.Timedelta(days=30)]
+    previous_month = df[(df['date'] < df['date'].max() - pd.Timedelta(days=30)) & (df['date'] >= df['date'].max() - pd.Timedelta(days=60))]
+    
+    last_month_sales = last_month['total_sales_inr'].sum()
+    previous_month_sales = previous_month['total_sales_inr'].sum()
+    
+    growth_rate = ((last_month_sales - previous_month_sales) / previous_month_sales) * 100 if previous_month_sales > 0 else 0
+
+    # Market variations
+    category_growth = {}
+    for category in df['category'].unique():
+        last_month_cat = last_month[last_month['category'] == category]['total_sales_inr'].sum()
+        previous_month_cat = previous_month[previous_month['category'] == category]['total_sales_inr'].sum()
+        category_growth[category] = ((last_month_cat - previous_month_cat) / previous_month_cat) * 100 if previous_month_cat > 0 else 0
+
+    # Alerts
+    alerts = []
+    if growth_rate > 20:
+        alerts.append({"type": "success", "message": f"Great job! Your sales have grown by {growth_rate:.2f}% in the last month."})
+    elif growth_rate < -10:
+        alerts.append({"type": "error", "message": f"Alert: Your sales have declined by {abs(growth_rate):.2f}% in the last month."})
+
+    for category, growth in category_growth.items():
+        if growth > 30:
+            alerts.append({"type": "info", "message": f"The {category} category is showing strong growth at {growth:.2f}%."})
+        elif growth < -20:
+            alerts.append({"type": "warning", "message": f"The {category} category is underperforming with a {abs(growth):.2f}% decline."})
+
+    context = {
+        'chart_stacked': chart_stacked,
+        'chart_heatmap': chart_heatmap,
+        'top_products': top_products.to_dict(),
+        'total_sales': total_sales,
+        'total_orders': total_orders,
+        'avg_order_value': avg_order_value,
+        'growth_rate': growth_rate,
+        'category_growth': category_growth,
+        'alerts': alerts,
+    }
+    return render(request, 'sales_forecast.html', context)

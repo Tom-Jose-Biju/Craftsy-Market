@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 import os
 from pathlib import Path
-import tensorflow as tf
+# import tensorflow as tf
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -29,11 +29,11 @@ SECRET_KEY = 'django-insecure-r57cwq=ns2q^^d5n)4-x$1^=rb@@b=0vixt$8q3vl^@@kn2juv
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 SITE_ID = 1
 # Stripe settings
@@ -58,6 +58,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -118,7 +119,12 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 STATIC_URL = '/static/'
-# STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Uncomment this if you have additional static files directories
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 
@@ -167,8 +173,7 @@ EMAIL_HOST_PASSWORD = 'Kozhmannil2002'
 
 LOGIN_REDIRECT_URL = 'home'
 
-# TensorFlow settings
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
 
 # Increase the maximum upload size (adjust as needed)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
@@ -185,3 +190,6 @@ CHANNEL_LAYERS = {
 }
 
 GST_RATE = 0.18
+
+SELENIUM_TIMEOUT = 10
+SELENIUM_HEADLESS = True

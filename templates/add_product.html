@@ -239,60 +239,44 @@
                 return this.optional(element) || /^image\//i.test(element.files[0].type);
             }, "Please select a valid image file.");
 
-            $('#product_images').on('change', function(event) {
-                var file = event.target.files[0];
+            // Image preview and classification
+            $('#product_images').change(function() {
+                var file = this.files[0];
                 if (file) {
-                    // Check if the file is a JPG
-                    if (!file.type.match('image/jpeg') && !file.type.match('image/jpg')) {
-                        $('#recognized_category').text('Error: Only JPG files are supported');
-                        return;
-                    }
-            
                     var reader = new FileReader();
                     reader.onload = function(e) {
                         $('#image_preview').attr('src', e.target.result).removeClass('hidden');
-                        
-                        // Send the image to the server for classification
-                        var formData = new FormData();
-                        formData.append('image', file);
-                        
-                        $.ajax({
-                            url: "{% url 'classify_image' %}",
-                            type: "POST",
-                            data: formData,
-                            processData: false,
-                            contentType: false,
-                            success: function(response) {
-                                if (response.success) {
-                                    $('#recognized_category').text('Recognized category: ' + response.category);
-                                    
-                                    // Update the category select field
-                                    var $categorySelect = $('#category');
-                                    if ($categorySelect.data('original-value') === '') {
-                                        $categorySelect.data('original-value', $categorySelect.val());
-                                    }
-                                    $categorySelect.val(response.category_id);
-                                } else {
-                                    $('#recognized_category').text('Could not recognize category: ' + response.message);
-                                    console.error('Error details:', response.message);
-                                }
-                            },
-                            error: function(xhr, status, error) {
-                                $('#recognized_category').text('Error classifying image: ' + error);
-                                console.error('Error details:', xhr.responseText);
-                            }
-                        });
-                    };
+                    }
                     reader.readAsDataURL(file);
-                }
-            });
-        
-            // Add this to allow manual override of the category
-            $('#category').on('change', function() {
-                var $this = $(this);
-                var originalValue = $this.data('original-value');
-                if (originalValue !== '' && $this.val() !== originalValue) {
-                    $('#recognized_category').text('Category manually changed');
+
+                    var formData = new FormData();
+                    formData.append('image', file);
+                    
+                    // Show loading state
+                    $('#recognized_category').text('Analyzing image...');
+                    
+                    $.ajax({
+                        url: "{% url 'classify_image' %}",
+                        type: "POST",
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function(response) {
+                            if (response.success) {
+                                $('#category').val(response.category_id);
+                                $('#recognized_category').html(
+                                    'Recognized category: <strong>' + response.category + '</strong><br>' +
+                                    'Confidence: ' + (response.confidence * 100).toFixed(2) + '%<br>' +
+                                    '<small class="text-gray-500">Detected as: ' + response.predicted_class + '</small>'
+                                );
+                            } else {
+                                $('#recognized_category').text('Error: ' + response.message);
+                            }
+                        },
+                        error: function() {
+                            $('#recognized_category').text('Error occurred during classification.');
+                        }
+                    });
                 }
             });
         });

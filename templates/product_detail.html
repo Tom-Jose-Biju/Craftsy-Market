@@ -530,6 +530,21 @@
             $('#total-price').text(newTotalPrice);
         }
 
+        function updateInventoryDisplay(newInventory) {
+            if (newInventory !== undefined) {
+                $('.product-inventory').html(`<span class="text-success">In stock: ${newInventory} available</span>`);
+                $('#quantity').attr('max', newInventory);
+                if (newInventory === 0) {
+                    $('.btn-add-to-cart').prop('disabled', true);
+                    $('.product-inventory').html('<span class="text-danger">Out of stock</span>');
+                } else {
+                    $('.btn-add-to-cart').prop('disabled', false);
+                }
+            } else {
+                console.error("New inventory is undefined");
+            }
+        }
+
         function incrementQuantity() {
             const quantityInput = $('#quantity');
             const currentQuantity = parseInt(quantityInput.val());
@@ -537,6 +552,7 @@
             if (currentQuantity < maxQuantity) {
                 quantityInput.val(currentQuantity + 1);
                 updatePrice();
+                updateCartItemQuantity({{ product.id }}, currentQuantity + 1);
             }
         }
 
@@ -546,6 +562,7 @@
             if (currentQuantity > 1) {
                 quantityInput.val(currentQuantity - 1);
                 updatePrice();
+                updateCartItemQuantity({{ product.id }}, currentQuantity - 1);
             }
         }
 
@@ -590,7 +607,7 @@
             const availableInventory = {{ product.inventory }};
 
             if (quantity > availableInventory) {
-                alert("Sorry, there's not enough inventory to fulfill your request.");
+                alert("Sorry, we don't have enough stock for this quantity.");
                 return;
             }
 
@@ -608,11 +625,7 @@
                         updateCartDisplay();
                         updateInventoryDisplay(response.new_inventory);
                     } else {
-                        if (response.error === "AnonymousUser") {
-                            alert("Please log in to add items to your cart.");
-                        } else {
-                            alert("Error adding product to cart: " + (response.error || "Unknown error"));
-                        }
+                        alert("Error adding product to cart: " + (response.error || "Unknown error"));
                     }
                 },
                 error: function(xhr, status, error) {
@@ -663,29 +676,29 @@
         }
 
         function updateCartItemQuantity(productId, newQuantity) {
-            if (productId && newQuantity >= 0) {
-                $.ajax({
-                    url: "{% url 'update_cart_quantity' %}",
-                    method: "POST",
-                    data: {
-                        product_id: productId,
-                        quantity: newQuantity,
-                        csrfmiddlewaretoken: "{{ csrf_token }}"
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            updateCartDisplay();
-                        } else {
-                            alert("Error updating cart. Please try again.");
-                        }
-                    },
-                    error: function() {
-                        alert("An unexpected error occurred. Please try again later.");
+            $.ajax({
+                url: "{% url 'update_cart_quantity' %}",
+                method: "POST",
+                data: {
+                    product_id: productId,
+                    quantity: newQuantity,
+                    csrfmiddlewaretoken: "{{ csrf_token }}"
+                },
+                success: function(response) {
+                    if (response.success) {
+                        updateInventoryDisplay(response.new_inventory);
+                        $(document).trigger('cartUpdated', {
+                            productId: productId,
+                            newInventory: response.new_inventory
+                        });
+                    } else {
+                        alert("Error updating cart. Please try again.");
                     }
-                });
-            } else {
-                console.error("Product ID is undefined or quantity is invalid");
-            }
+                },
+                error: function() {
+                    alert("An unexpected error occurred. Please try again later.");
+                }
+            });
         }
 
         function removeFromCart(productId) {
@@ -694,15 +707,6 @@
 
         function updateCartToggle(totalItems) {
             $('#cartToggle').html(`<i class="fas fa-shopping-cart"></i> <span class="badge bg-danger">${totalItems}</span>`);
-        }
-
-        function updateInventoryDisplay(newInventory) {
-            $('.product-inventory').html(`<span class="text-success">In stock: ${newInventory} available</span>`);
-            $('#quantity').attr('max', newInventory);
-            if (newInventory === 0) {
-                $('.btn-add-to-cart').prop('disabled', true);
-                $('.product-inventory').html('<span class="text-danger">Out of stock</span>');
-            }
         }
 
         function checkout() {
@@ -801,6 +805,13 @@
             // Event listener for closing the authenticity popup
             $('#authenticityPopup .btn-circle, #authenticityPopup .modal-action .btn').click(function() {
                 closeAuthenticityPopup();
+            });
+
+            // Add event listeners for cart updates
+            $(document).on('cartUpdated', function(event, data) {
+                if (data.productId == {{ product.id }}) {
+                    updateInventoryDisplay(data.newInventory);
+                }
             });
         });
     </script>

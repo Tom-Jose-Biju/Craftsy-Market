@@ -16,6 +16,7 @@
             padding: 8px;
             border-radius: 8px;
             margin-bottom: 8px;
+            word-wrap: break-word;
         }
         .chat-message.sent {
             background-color: #4a5568;
@@ -24,6 +25,21 @@
         .chat-message.received {
             background-color: #2d3748;
             margin-right: 20%;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
@@ -38,6 +54,13 @@
             <button id="chat-message-submit" class="btn btn-primary mr-2">Send</button>
             <button id="clear-chat" class="btn btn-secondary">Clear Chat</button>
         </div>
+        <div id="loading-indicator" class="hidden">
+            <div class="spinner"></div>
+            <p>Loading messages...</p>
+        </div>
+        <div id="error-message" class="hidden alert alert-error">
+            <p>An error occurred. Please try again.</p>
+        </div>
     </div>
 
     <script>
@@ -45,21 +68,44 @@
         const username = "{{ request.user.username }}";
         let lastMessageId = 0;
 
+        function showLoading() {
+            $('#loading-indicator').removeClass('hidden');
+        }
+
+        function hideLoading() {
+            $('#loading-indicator').addClass('hidden');
+        }
+
+        function showError(message) {
+            $('#error-message p').text(message);
+            $('#error-message').removeClass('hidden');
+            setTimeout(() => {
+                $('#error-message').addClass('hidden');
+            }, 5000);
+        }
+
         function loadMessages() {
+            showLoading();
             $.ajax({
                 url: '/chat/get_messages/' + roomName + '/',
                 method: 'GET',
                 data: { 'last_id': lastMessageId },
                 success: function(data) {
-                    data.messages.forEach(function(message) {
-                        if (message.id > lastMessageId) {
-                            addMessage(message.username, message.message, message.timestamp, message.user_type);
-                            lastMessageId = message.id;
-                        }
-                    });
+                    hideLoading();
+                    if (data.success) {
+                        data.messages.forEach(function(message) {
+                            if (message.id > lastMessageId) {
+                                addMessage(message.username, message.message, message.timestamp, message.user_type);
+                                lastMessageId = message.id;
+                            }
+                        });
+                    } else {
+                        showError("Failed to load messages: " + data.error);
+                    }
                 },
-                error: function() {
-                    console.error("Failed to load messages.");
+                error: function(xhr, status, error) {
+                    hideLoading();
+                    showError("Failed to load messages: " + error);
                 },
                 complete: function() {
                     setTimeout(loadMessages, 1000); // Poll every second
@@ -82,7 +128,7 @@
         }
 
         function sendMessage() {
-            const message = $('#chat-message-input').val();
+            const message = $('#chat-message-input').val().trim();
             if (message) {
                 $.ajax({
                     url: '/chat/send_message/' + roomName + '/',
@@ -92,31 +138,45 @@
                         'csrfmiddlewaretoken': '{{ csrf_token }}'
                     },
                     success: function(data) {
-                        $('#chat-message-input').val('');
-                        addMessage(username, message, new Date().toISOString(), 'artisan');
+                        if (data.success) {
+                            $('#chat-message-input').val('');
+                            addMessage(username, message, data.timestamp, '{{ request.user.user_type }}');
+                        } else {
+                            console.error("Failed to send message:", data.error);
+                            alert("Failed to send message. Please try again.");
+                        }
                     },
-                    error: function() {
-                        console.error("Failed to send message. Please try again.");
+                    error: function(xhr, status, error) {
+                        console.error("Failed to send message:", error);
+                        alert("Failed to send message. Please try again.");
                     }
                 });
             }
         }
 
         function clearChat() {
-            $.ajax({
-                url: '/chat/clear_chat/' + roomName + '/',
-                method: 'POST',
-                data: {
-                    'csrfmiddlewaretoken': '{{ csrf_token }}'
-                },
-                success: function() {
-                    $('#chat-messages').empty();
-                    lastMessageId = 0;
-                },
-                error: function() {
-                    console.error("Failed to clear chat. Please try again.");
-                }
-            });
+            if (confirm("Are you sure you want to clear the chat history?")) {
+                $.ajax({
+                    url: '/chat/clear_chat/' + roomName + '/',
+                    method: 'POST',
+                    data: {
+                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                    },
+                    success: function(data) {
+                        if (data.success) {
+                            $('#chat-messages').empty();
+                            lastMessageId = 0;
+                        } else {
+                            console.error("Failed to clear chat:", data.error);
+                            alert("Failed to clear chat. Please try again.");
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("Failed to clear chat:", error);
+                        alert("Failed to clear chat. Please try again.");
+                    }
+                });
+            }
         }
 
         $(document).ready(function() {
