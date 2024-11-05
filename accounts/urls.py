@@ -1,11 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
-from accounts.views import classify_image
 from django.views.decorators.csrf import ensure_csrf_cookie
-
-
-
-
 from . import views
 
 urlpatterns = [
@@ -90,7 +85,7 @@ urlpatterns = [
     path('submit-review/<int:order_item_id>/', views.submit_review, name='submit_review'),
     path('delete-review/<int:review_id>/', views.delete_review, name='delete_review'),
     path('artisan/earnings/', views.artisan_earnings, name='artisan_earnings'),
-    path('classify-image/', ensure_csrf_cookie(classify_image), name='classify_image'),
+    path('classify-image/', ensure_csrf_cookie(views.classify_image), name='classify_image'),
     path('blog/<int:blog_id>/like/', views.like_blog, name='like_blog'),
     path('blog/<int:blog_id>/comment/', views.add_comment, name='add_comment'),
     path('blog/<int:blog_id>/comments/', views.get_blog_comments, name='get_blog_comments'),
