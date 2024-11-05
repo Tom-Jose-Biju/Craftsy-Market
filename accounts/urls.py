@@ -1,10 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
-from .views import artisan_documents
 from accounts.views import classify_image
 from django.views.decorators.csrf import ensure_csrf_cookie
-from accounts.views import get_artisan_info
-from accounts.views import download_invoice
 
 
 
@@ -82,7 +79,7 @@ urlpatterns = [
     path('artisan/blog/write/', views.artisan_blog_write, name='artisan_blog_write'),
     path('artisan/blog/<int:blog_id>/', views.get_blog_details, name='get_blog_details'),
     path('artisan/blog/<int:blog_id>/delete/', views.delete_blog, name='delete_blog'),
-    path('artisan/documents/', artisan_documents, name='artisan_documents'),
+    path('artisan/documents/', views.artisan_documents, name='artisan_documents'),
     path('virtual-try-on/<int:product_id>/', views.virtual_try_on, name='virtual_try_on'),
     path('single-product-checkout/<int:product_id>/', views.single_product_checkout, name='single_product_checkout'),
     path('download-product-report/', views.download_product_report, name='download_product_report'),
@@ -105,7 +102,7 @@ urlpatterns = [
     path('chat/clear_chat/<str:room_name>/', views.clear_chat, name='clear_chat'),
     path('get-artisan-info/<int:artisan_id>/', views.get_artisan_info, name='get_artisan_info'),
     path('artisan-products/<int:artisan_id>/', views.artisan_products_view, name='artisan_products_view'),
-    path('order/<int:order_id>/invoice/', download_invoice, name='download_invoice'),
+    path('order/<int:order_id>/invoice/', views.download_invoice, name='download_invoice'),
 
     # Add these new URL patterns
     path('artisan/sales-forecast/<int:artisan_id>/', views.sales_forecast, name='sales_forecast'),
