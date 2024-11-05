@@ -1664,28 +1664,34 @@ def simulate_delivery(request, order_id):
     return redirect('order_detail', order_id=order.id)
 
 
-
-from django.core.files.base import ContentFile
-from PIL import Image
-import numpy as np
-import io
-from transformers import ViTImageProcessor, ViTForImageClassification
-import torch
+from functools import lru_cache
 
 
 @ensure_csrf_cookie
 @login_required
+@lru_cache(maxsize=1)
+def get_image_classifier():
+    from transformers import ViTImageProcessor, ViTForImageClassification
+    processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224')
+    model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
+    return processor, model
+
+@login_required
 def classify_image(request):
-    if request.method == 'POST' and request.FILES.get('image'):
-        image_file = request.FILES['image']
+    if request.method != 'POST' or 'image' not in request.FILES:
+        return JsonResponse({'success': False, 'message': 'No image provided'})
+    
+    try:
+        # Load model only when needed
+        processor, model = get_image_classifier()
+        
+        image = request.FILES['image']
+        image_bytes = image.read()
+        
+        # Save the uploaded file temporarily
+        temp_path = default_storage.save('temp_image.jpg', ContentFile(image_bytes))
+        
         try:
-            # Save the uploaded file temporarily
-            temp_path = default_storage.save('temp_image.jpg', ContentFile(image_file.read()))
-            
-            # Load the ViT model and processor
-            processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224')
-            model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
-            
             # Process the image
             with default_storage.open(temp_path) as f:
                 img = Image.open(io.BytesIO(f.read())).convert('RGB')
@@ -1811,14 +1817,12 @@ def classify_image(request):
                 'predicted_class': predicted_class  # Original ImageNet class for reference
             })
             
-        except Exception as e:
-            return JsonResponse({'success': False, 'message': f"Error: {str(e)}"})
         finally:
             # Clean up the temporary file
-            if 'temp_path' in locals():
-                default_storage.delete(temp_path)
+            default_storage.delete(temp_path)
                 
-    return JsonResponse({'success': False, 'message': 'Invalid request'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f"Error: {str(e)}"})
 
 @login_required
 def download_earnings_report(request):
