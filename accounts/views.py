@@ -1658,58 +1658,6 @@ def simulate_delivery(request, order_id):
     return redirect('order_detail', order_id=order.id)
 
 
-# import logging
-
-# logger = logging.getLogger(__name__)
-
-# @ensure_csrf_cookie
-# @login_required
-# def classify_image(request):
-#     if request.method == 'POST' and request.FILES.get('image'):
-#         image_file = request.FILES['image']
-#         try:
-#             from PIL import Image
-#             import numpy as np
-
-#             # Load the custom trained model
-#             model_path = os.path.join(settings.BASE_DIR, 'custom_efficientnet_model.h5')
-#             if not os.path.exists(model_path):
-#                 return JsonResponse({'success': False, 'message': 'Model file not found. Please train the model first.'})
-            
-#             model = tf.keras.models.load_model(model_path)
-
-#             # Process the image
-#             img = Image.open(image_file).convert('RGB')
-#             img = img.resize((224, 224))  # Resize to match the input size used during training
-#             img_array = np.array(img)
-#             img_array = np.expand_dims(img_array, 0)
-#             img_array = tf.keras.applications.efficientnet.preprocess_input(img_array)
-
-#             # Make prediction
-#             predictions = model.predict(img_array)
-#             predicted_class_index = tf.argmax(predictions[0]).numpy()
-
-#             # Get category name and ID
-#             categories = dict(Product.CATEGORY_CHOICES)
-#             category_name = list(categories.values())[predicted_class_index]
-#             category_id = list(categories.keys())[predicted_class_index]
-
-#             # Get confidence score
-#             confidence = float(predictions[0][predicted_class_index])
-
-#             return JsonResponse({
-#                 'success': True, 
-#                 'category': category_name, 
-#                 'category_id': category_id,
-#                 'confidence': confidence
-#             })
-#         except ImportError as e:
-#             return JsonResponse({'success': False, 'message': f"Error importing required modules: {str(e)}"})
-#         except (IOError, OSError) as e:
-#             return JsonResponse({'success': False, 'message': f"Error processing image: {str(e)}"})
-#         except Exception as e:
-#             return JsonResponse({'success': False, 'message': f"Unexpected error: {str(e)}"})
-#     return JsonResponse({'success': False, 'message': 'Invalid request'})
 
 from django.core.files.base import ContentFile
 from PIL import Image
