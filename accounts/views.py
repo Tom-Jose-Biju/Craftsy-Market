@@ -2173,98 +2173,98 @@ def handle_authenticity_document(request, document_id, action):
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
-from django.db.models.functions import TruncDate
-import pandas as pd
-from prophet import Prophet
-import csv
-import plotly.graph_objects as go
-import plotly.express as px
+# from django.db.models.functions import TruncDate
+# import pandas as pd
+# from prophet import Prophet
+# import csv
+# import plotly.graph_objects as go
+# import plotly.express as px
 
-@login_required
-def sales_forecast(request, artisan_id):
-    # Read the CSV file
-    csv_file_path = 'artisan_sales_data.csv'
-    df = pd.read_csv(csv_file_path)
+# @login_required
+# def sales_forecast(request, artisan_id):
+#     # Read the CSV file
+#     csv_file_path = 'artisan_sales_data.csv'
+#     df = pd.read_csv(csv_file_path)
     
-    # Filter data for the specific artisan
-    df = df[df['artisan_id'] == artisan_id]
+#     # Filter data for the specific artisan
+#     df = df[df['artisan_id'] == artisan_id]
     
-    if df.empty:
-        context = {
-            'error_message': "No sales data available for forecasting.",
-        }
-        return render(request, 'sales_forecast.html', context)
+#     if df.empty:
+#         context = {
+#             'error_message': "No sales data available for forecasting.",
+#         }
+#         return render(request, 'sales_forecast.html', context)
 
-    # Prepare data for charts
-    df['date'] = pd.to_datetime(df['date'])
-    df['total_sales'] = df['quantity'] * df['price']
+#     # Prepare data for charts
+#     df['date'] = pd.to_datetime(df['date'])
+#     df['total_sales'] = df['quantity'] * df['price']
     
-    # Convert USD to INR (assuming 1 USD = 75 INR)
-    usd_to_inr = 75
-    df['total_sales_inr'] = df['total_sales'] * usd_to_inr
+#     # Convert USD to INR (assuming 1 USD = 75 INR)
+#     usd_to_inr = 75
+#     df['total_sales_inr'] = df['total_sales'] * usd_to_inr
 
-    # Stacked area chart for product categories
-    category_sales = df.groupby(['date', 'category'])['total_sales_inr'].sum().unstack()
-    fig_stacked = px.area(category_sales, x=category_sales.index, y=category_sales.columns,
-                          title='Sales by Product Category (INR)')
-    chart_stacked = fig_stacked.to_html(full_html=False)
+#     # Stacked area chart for product categories
+#     category_sales = df.groupby(['date', 'category'])['total_sales_inr'].sum().unstack()
+#     fig_stacked = px.area(category_sales, x=category_sales.index, y=category_sales.columns,
+#                           title='Sales by Product Category (INR)')
+#     chart_stacked = fig_stacked.to_html(full_html=False)
 
-    # Heatmap for daily sales
-    daily_sales = df.groupby('date')['total_sales_inr'].sum().reset_index()
-    daily_sales['weekday'] = daily_sales['date'].dt.weekday
-    daily_sales['week'] = daily_sales['date'].dt.isocalendar().week
-    pivot_sales = daily_sales.pivot(index='week', columns='weekday', values='total_sales_inr')
-    fig_heatmap = px.imshow(pivot_sales, labels=dict(x="Day of Week", y="Week", color="Sales (INR)"),
-                            x=['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                            title='Daily Sales Heatmap (INR)')
-    chart_heatmap = fig_heatmap.to_html(full_html=False)
+#     # Heatmap for daily sales
+#     daily_sales = df.groupby('date')['total_sales_inr'].sum().reset_index()
+#     daily_sales['weekday'] = daily_sales['date'].dt.weekday
+#     daily_sales['week'] = daily_sales['date'].dt.isocalendar().week
+#     pivot_sales = daily_sales.pivot(index='week', columns='weekday', values='total_sales_inr')
+#     fig_heatmap = px.imshow(pivot_sales, labels=dict(x="Day of Week", y="Week", color="Sales (INR)"),
+#                             x=['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+#                             title='Daily Sales Heatmap (INR)')
+#     chart_heatmap = fig_heatmap.to_html(full_html=False)
 
-    # Top selling products
-    top_products = df.groupby('product_name')['quantity'].sum().sort_values(ascending=False).head(5)
+#     # Top selling products
+#     top_products = df.groupby('product_name')['quantity'].sum().sort_values(ascending=False).head(5)
 
-    # Summary statistics
-    total_sales = df['total_sales_inr'].sum()
-    total_orders = df['quantity'].sum()
-    avg_order_value = total_sales / total_orders if total_orders > 0 else 0
+#     # Summary statistics
+#     total_sales = df['total_sales_inr'].sum()
+#     total_orders = df['quantity'].sum()
+#     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
 
-    # Growth insights
-    last_month = df[df['date'] >= df['date'].max() - pd.Timedelta(days=30)]
-    previous_month = df[(df['date'] < df['date'].max() - pd.Timedelta(days=30)) & (df['date'] >= df['date'].max() - pd.Timedelta(days=60))]
+#     # Growth insights
+#     last_month = df[df['date'] >= df['date'].max() - pd.Timedelta(days=30)]
+#     previous_month = df[(df['date'] < df['date'].max() - pd.Timedelta(days=30)) & (df['date'] >= df['date'].max() - pd.Timedelta(days=60))]
     
-    last_month_sales = last_month['total_sales_inr'].sum()
-    previous_month_sales = previous_month['total_sales_inr'].sum()
+#     last_month_sales = last_month['total_sales_inr'].sum()
+#     previous_month_sales = previous_month['total_sales_inr'].sum()
     
-    growth_rate = ((last_month_sales - previous_month_sales) / previous_month_sales) * 100 if previous_month_sales > 0 else 0
+#     growth_rate = ((last_month_sales - previous_month_sales) / previous_month_sales) * 100 if previous_month_sales > 0 else 0
 
-    # Market variations
-    category_growth = {}
-    for category in df['category'].unique():
-        last_month_cat = last_month[last_month['category'] == category]['total_sales_inr'].sum()
-        previous_month_cat = previous_month[previous_month['category'] == category]['total_sales_inr'].sum()
-        category_growth[category] = ((last_month_cat - previous_month_cat) / previous_month_cat) * 100 if previous_month_cat > 0 else 0
+#     # Market variations
+#     category_growth = {}
+#     for category in df['category'].unique():
+#         last_month_cat = last_month[last_month['category'] == category]['total_sales_inr'].sum()
+#         previous_month_cat = previous_month[previous_month['category'] == category]['total_sales_inr'].sum()
+#         category_growth[category] = ((last_month_cat - previous_month_cat) / previous_month_cat) * 100 if previous_month_cat > 0 else 0
 
-    # Alerts
-    alerts = []
-    if growth_rate > 20:
-        alerts.append({"type": "success", "message": f"Great job! Your sales have grown by {growth_rate:.2f}% in the last month."})
-    elif growth_rate < -10:
-        alerts.append({"type": "error", "message": f"Alert: Your sales have declined by {abs(growth_rate):.2f}% in the last month."})
+#     # Alerts
+#     alerts = []
+#     if growth_rate > 20:
+#         alerts.append({"type": "success", "message": f"Great job! Your sales have grown by {growth_rate:.2f}% in the last month."})
+#     elif growth_rate < -10:
+#         alerts.append({"type": "error", "message": f"Alert: Your sales have declined by {abs(growth_rate):.2f}% in the last month."})
 
-    for category, growth in category_growth.items():
-        if growth > 30:
-            alerts.append({"type": "info", "message": f"The {category} category is showing strong growth at {growth:.2f}%."})
-        elif growth < -20:
-            alerts.append({"type": "warning", "message": f"The {category} category is underperforming with a {abs(growth):.2f}% decline."})
+#     for category, growth in category_growth.items():
+#         if growth > 30:
+#             alerts.append({"type": "info", "message": f"The {category} category is showing strong growth at {growth:.2f}%."})
+#         elif growth < -20:
+#             alerts.append({"type": "warning", "message": f"The {category} category is underperforming with a {abs(growth):.2f}% decline."})
 
-    context = {
-        'chart_stacked': chart_stacked,
-        'chart_heatmap': chart_heatmap,
-        'top_products': top_products.to_dict(),
-        'total_sales': total_sales,
-        'total_orders': total_orders,
-        'avg_order_value': avg_order_value,
-        'growth_rate': growth_rate,
-        'category_growth': category_growth,
-        'alerts': alerts,
-    }
-    return render(request, 'sales_forecast.html', context)
+#     context = {
+#         'chart_stacked': chart_stacked,
+#         'chart_heatmap': chart_heatmap,
+#         'top_products': top_products.to_dict(),
+#         'total_sales': total_sales,
+#         'total_orders': total_orders,
+#         'avg_order_value': avg_order_value,
+#         'growth_rate': growth_rate,
+#         'category_growth': category_growth,
+#         'alerts': alerts,
+#     }
+#     return render(request, 'sales_forecast.html', context)

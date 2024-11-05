@@ -100,6 +100,6 @@ urlpatterns = [
     path('order/<int:order_id>/invoice/', views.download_invoice, name='download_invoice'),
 
     # Add these new URL patterns
-    path('artisan/sales-forecast/<int:artisan_id>/', views.sales_forecast, name='sales_forecast'),
+    # path('artisan/sales-forecast/<int:artisan_id>/', views.sales_forecast, name='sales_forecast'),
     
 ]
