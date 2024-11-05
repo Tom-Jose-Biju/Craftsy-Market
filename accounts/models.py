@@ -3,8 +3,8 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
-from tensorflow.keras.applications.efficientnet import EfficientNetB0, preprocess_input, decode_predictions
-from tensorflow.keras.preprocessing import image
+# from tensorflow.keras.applications.efficientnet import EfficientNetB0, preprocess_input, decode_predictions
+# from tensorflow.keras.preprocessing import image
 import numpy as np
 # import tensorflow as tf
 from django.db.models.signals import post_save
@@ -101,34 +101,34 @@ class Product(models.Model):
     def is_in_stock(self):
         return self.inventory > 0
 
-    def classify_image(self, image_file):
-        print("Loading custom EfficientNet model...")
-        model = tf.keras.models.load_model('custom_efficientnet_model.h5')
-        print("Model loaded successfully")
+    # def classify_image(self, image_file):
+    #     print("Loading custom EfficientNet model...")
+    #     model = tf.keras.models.load_model('custom_efficientnet_model.h5')
+    #     print("Model loaded successfully")
 
-        print(f"Image file type: {type(image_file)}")
+    #     print(f"Image file type: {type(image_file)}")
         
-        if isinstance(image_file, (InMemoryUploadedFile, TemporaryUploadedFile)):
-            print("Processing UploadedFile")
-            img = image.load_img(io.BytesIO(image_file.read()), target_size=(224, 224))
-        else:
-            print("Processing file path")
-            img = image.load_img(image_file, target_size=(224, 224))
+    #     if isinstance(image_file, (InMemoryUploadedFile, TemporaryUploadedFile)):
+    #         print("Processing UploadedFile")
+    #         img = image.load_img(io.BytesIO(image_file.read()), target_size=(224, 224))
+    #     else:
+    #         print("Processing file path")
+    #         img = image.load_img(image_file, target_size=(224, 224))
         
-        print("Image loaded successfully")
-        x = image.img_to_array(img)
-        x = np.expand_dims(x, axis=0)
-        x = x / 255.0  # Normalize the image
+    #     print("Image loaded successfully")
+    #     x = image.img_to_array(img)
+    #     x = np.expand_dims(x, axis=0)
+    #     x = x / 255.0  # Normalize the image
 
-        print("Making prediction...")
-        preds = model.predict(x)
-        print("Prediction made successfully")
-        predicted_class_index = np.argmax(preds[0])
-        category_names = list(self.CATEGORY_CHOICES)
-        predicted_category = category_names[predicted_class_index]
-        print(f"Predicted category: {predicted_category}")
+    #     print("Making prediction...")
+    #     preds = model.predict(x)
+    #     print("Prediction made successfully")
+    #     predicted_class_index = np.argmax(preds[0])
+    #     category_names = list(self.CATEGORY_CHOICES)
+    #     predicted_category = category_names[predicted_class_index]
+    #     print(f"Predicted category: {predicted_category}")
 
-        return predicted_category
+    #     return predicted_category
 
     @staticmethod
     def map_prediction_to_category(predictions):
@@ -205,13 +205,13 @@ class ProductImage(models.Model):
     is_primary = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    @receiver(post_save, sender='accounts.ProductImage')
-    def classify_product_image(sender, instance, created, **kwargs):
-        if created and instance.is_primary:
-            category_name = instance.product.classify_image(instance.image)
-            category, _ = Category.objects.get_or_create(name=category_name)
-            instance.product.category = category
-            instance.product.save()
+    # @receiver(post_save, sender='accounts.ProductImage')
+    # def classify_product_image(sender, instance, created, **kwargs):
+    #     if created and instance.is_primary:
+    #         category_name = instance.product.classify_image(instance.image)
+    #         category, _ = Category.objects.get_or_create(name=category_name)
+    #         instance.product.category = category
+    #         instance.product.save()
 
     def __str__(self):
         return f"Image for {self.product.name}"

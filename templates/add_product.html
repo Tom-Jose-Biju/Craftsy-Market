@@ -221,10 +221,18 @@
                         contentType: false,
                         success: function(response) {
                             if (response.success) {
-                                $("#formMessage").removeClass("hidden bg-red-100 text-red-700").addClass("bg-green-100 text-green-700 p-3 rounded").text("Product added successfully!");
+                                $("#formMessage")
+                                    .removeClass("hidden bg-red-100 text-red-700")
+                                    .addClass("bg-green-100 text-green-700 p-3 rounded")
+                                    .text(response.message);
                                 form.reset();
+                                $('#image_preview').addClass('hidden');
+                                $('#recognized_category').text('');
                             } else {
-                                $("#formMessage").removeClass("hidden bg-green-100 text-green-700").addClass("bg-red-100 text-red-700 p-3 rounded").text("Error: " + response.message);
+                                $("#formMessage")
+                                    .removeClass("hidden bg-green-100 text-green-700")
+                                    .addClass("bg-red-100 text-red-700 p-3 rounded")
+                                    .text("Error: " + (response.errors ? JSON.stringify(response.errors) : response.message));
                             }
                         },
                         error: function(xhr, status, error) {

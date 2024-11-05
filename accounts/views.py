@@ -441,6 +441,7 @@ def artisanview(request):
 
 # Product Views
 @login_required
+@login_required
 def add_product(request):
     if request.user.user_type != 'artisan':
         return JsonResponse({'success': False, 'message': "Only artisans can add products."})
@@ -467,7 +468,12 @@ def add_product(request):
                         is_primary=(i == 0)
                     )
 
-                return JsonResponse({'success': True, 'message': "Product added successfully!"})
+                # Return only necessary information
+                return JsonResponse({
+                    'success': True, 
+                    'message': "Product added successfully!",
+                    'product_id': product.id
+                })
             except Exception as e:
                 return JsonResponse({'success': False, 'message': str(e)})
         else:

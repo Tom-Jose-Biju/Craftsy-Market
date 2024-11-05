@@ -11,7 +11,7 @@ python-dotenv==1.0.1
 reportlab==4.2.2
 stripe==10.6.0
 torch==2.5.0
-transformers==4.46.0
+transformers
 webdriver_manager==4.0.2
 gunicorn
 whitenoise
