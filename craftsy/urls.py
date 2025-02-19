@@ -19,15 +19,11 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 urlpatterns = [
-    path('admin/', admin.site.urls),  # Admin panel URL
-    path('',include('accounts.urls')),
+    path('admin/', admin.site.urls),  # Django admin panel URL
+    path('', include('accounts.urls')),  # Include accounts URLs at root
     path('oauth/', include('social_django.urls', namespace='social')),
     path('chat/', include('craftsy.routing')),
-
-]
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

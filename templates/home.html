@@ -256,6 +256,7 @@
                         <li><a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Login</a></li>
                         <li><a href="{% url 'register' %}" class="btn btn-ghost btn-sm">Register</a></li>
                         <li><a href="{% url 'artisanview' %}" class="btn btn-primary btn-sm">Artisan?</a></li>
+                        <li><a href="{% url 'delivery_partner_register' %}" class="btn btn-primary btn-sm">Become a Delivery Person</a></li>
                     {% endif %}
                 </ul>
             </div>
@@ -429,6 +430,18 @@
             </div>
         </div>
     </section>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Join as a Delivery Partner</h5>
+                    <p class="card-text">Become a delivery partner and earn money by delivering products to customers.</p>
+                    <a href="{% url 'delivery_partner_register' %}" class="btn btn-primary">Register as Delivery Partner</a>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <footer class="footer p-10 bg-neutral text-neutral-content">
         <div class="container">

@@ -1,0 +1,30 @@
+{% extends 'admin/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Assign Delivery Partner</h2>
+    <div class="card">
+        <div class="card-body">
+            <h5>Order #{{ order.id }}</h5>
+            <p>Customer: {{ order.user.get_full_name }}</p>
+            <p>Total Amount: ₹{{ order.total_price }}</p>
+            
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label>Select Delivery Partner</label>
+                    <select name="delivery_partner" class="form-control" required>
+                        {% for partner in available_partners %}
+                        <option value="{{ partner.id }}">
+                            {{ partner.user.get_full_name }} 
+                            ({{ partner.vehicle_type }} - Rating: {{ partner.rating }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">Assign Delivery</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %} 

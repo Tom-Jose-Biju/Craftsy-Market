@@ -1,0 +1,49 @@
+{% extends 'admin/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Pending Delivery Partner Applications</h2>
+    
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Vehicle Type</th>
+                    <th>License Number</th>
+                    <th>Documents</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for partner in partners %}
+                <tr>
+                    <td>{{ partner.user.get_full_name }}</td>
+                    <td>{{ partner.vehicle_type }}</td>
+                    <td>{{ partner.license_number }}</td>
+                    <td>
+                        {% if partner.license_image %}
+                            <a href="{{ partner.license_image.url }}" target="_blank">View License</a>
+                        {% endif %}
+                        {% if partner.id_proof %}
+                            <a href="{{ partner.id_proof.url }}" target="_blank">View ID Proof</a>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" action="{% url 'approve_delivery_partner' partner.id %}">
+                            {% csrf_token %}
+                            <button type="submit" name="action" value="approve" class="btn btn-success btn-sm">
+                                Approve
+                            </button>
+                            <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm">
+                                Reject
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %} 

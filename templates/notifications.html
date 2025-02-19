@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold">Notifications</h2>
+            {% if unread_count > 0 %}
+            <button id="markAllRead" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                Mark All as Read
+            </button>
+            {% endif %}
+        </div>
+
+        {% if notifications %}
+            <div class="space-y-4">
+                {% for notification in notifications %}
+                <div class="notification-item border rounded-lg p-4 {% if not notification.is_read %}bg-blue-50{% endif %}"
+                    data-notification-id="{{ notification.id }}">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold text-lg">{{ notification.title }}</h3>
+                            <p class="text-gray-600 whitespace-pre-line">{{ notification.message }}</p>
+                            <div class="text-sm text-gray-500 mt-2">
+                                {{ notification.created_at|date:"F d, Y H:i" }}
+                            </div>
+                        </div>
+                        {% if not notification.is_read %}
+                        <button class="mark-read-btn text-blue-600 hover:text-blue-800">
+                            Mark as Read
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if notifications.has_other_pages %}
+            <div class="mt-6 flex justify-center">
+                <nav class="inline-flex rounded-md shadow">
+                    {% if notifications.has_previous %}
+                    <a href="?page={{ notifications.previous_page_number }}"
+                       class="px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Previous
+                    </a>
+                    {% endif %}
+
+                    {% if notifications.has_next %}
+                    <a href="?page={{ notifications.next_page_number }}"
+                       class="px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Next
+                    </a>
+                    {% endif %}
+                </nav>
+            </div>
+            {% endif %}
+        {% else %}
+            <div class="text-center py-8">
+                <p class="text-gray-500">No notifications yet.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Mark single notification as read
+    document.querySelectorAll('.mark-read-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const notificationItem = this.closest('.notification-item');
+            const notificationId = notificationItem.dataset.notificationId;
+            
+            fetch(`/notifications/${notificationId}/mark-read/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    notificationItem.classList.remove('bg-blue-50');
+                    this.remove();
+                    updateUnreadCount();
+                }
+            });
+        });
+    });
+
+    // Mark all notifications as read
+    const markAllBtn = document.getElementById('markAllRead');
+    if (markAllBtn) {
+        markAllBtn.addEventListener('click', function() {
+            fetch('/notifications/mark-all-read/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.querySelectorAll('.notification-item').forEach(item => {
+                        item.classList.remove('bg-blue-50');
+                        item.querySelector('.mark-read-btn')?.remove();
+                    });
+                    markAllBtn.remove();
+                    updateUnreadCount();
+                }
+            });
+        });
+    }
+
+    // Helper function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Update unread count in the navbar
+    function updateUnreadCount() {
+        fetch('/notifications/unread-count/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const countElement = document.querySelector('.notification-count');
+                if (countElement) {
+                    if (data.count > 0) {
+                        countElement.textContent = data.count;
+                        countElement.classList.remove('hidden');
+                    } else {
+                        countElement.classList.add('hidden');
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %} 

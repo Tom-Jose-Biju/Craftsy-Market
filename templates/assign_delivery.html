@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title mb-0">{{ page_title }}</h2>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <h4>Order Details</h4>
+                    <table class="table">
+                        <tr>
+                            <th>Order ID:</th>
+                            <td>#{{ order.id }}</td>
+                        </tr>
+                        <tr>
+                            <th>Customer:</th>
+                            <td>{{ order.user.get_full_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Address:</th>
+                            <td>
+                                {{ order.user.profile.street_address }}<br>
+                                {{ order.user.profile.city }}, {{ order.user.profile.state }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Order Date:</th>
+                            <td>{{ order.created_at|date:"F d, Y H:i" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Total Amount:</th>
+                            <td>₹{{ order.total_price }}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h4>Assign Delivery Partner</h4>
+                    {% if delivery_partners %}
+                        <form method="post" action="{% url 'assign_delivery' order.id %}">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label for="delivery_partner" class="form-label">Select Delivery Partner</label>
+                                <select name="delivery_partner" id="delivery_partner" class="form-select" required>
+                                    <option value="">Choose a delivery partner...</option>
+                                    {% for partner in delivery_partners %}
+                                    <option value="{{ partner.id }}">
+                                        {{ partner.user.get_full_name }} 
+                                        (Active Deliveries: {{ partner.active_deliveries }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-truck me-2"></i>Assign Delivery
+                            </button>
+                            <a href="{% url 'unassigned_orders' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Back
+                            </a>
+                        </form>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No available delivery partners at the moment.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -251,6 +251,11 @@
             $('#product_images').change(function() {
                 var file = this.files[0];
                 if (file) {
+                    // Show loading state
+                    $('#recognized_category')
+                        .html('<div class="loading">Analyzing image... <i class="fas fa-spinner fa-spin"></i></div>')
+                        .removeClass('hidden');
+                    
                     var reader = new FileReader();
                     reader.onload = function(e) {
                         $('#image_preview').attr('src', e.target.result).removeClass('hidden');
@@ -260,9 +265,6 @@
                     var formData = new FormData();
                     formData.append('image', file);
                     
-                    // Show loading state
-                    $('#recognized_category').text('Analyzing image...');
-                    
                     $.ajax({
                         url: "{% url 'classify_image' %}",
                         type: "POST",
@@ -271,18 +273,43 @@
                         contentType: false,
                         success: function(response) {
                             if (response.success) {
-                                $('#category').val(response.category_id);
-                                $('#recognized_category').html(
-                                    'Recognized category: <strong>' + response.category + '</strong><br>' +
-                                    'Confidence: ' + (response.confidence * 100).toFixed(2) + '%<br>' +
-                                    '<small class="text-gray-500">Detected as: ' + response.predicted_class + '</small>'
-                                );
+                                // Find the category option that matches the classification
+                                var categoryOption = $('#category option').filter(function() {
+                                    return $(this).text().toLowerCase() === response.classification.toLowerCase();
+                                });
+                                
+                                // If we found a matching category, select it
+                                if (categoryOption.length > 0) {
+                                    $('#category').val(categoryOption.val());
+                                }
+
+                                // Format the recognition results
+                                var resultHtml = 'Recognized category: <strong>' + response.classification + '</strong><br>' +
+                                               'Confidence: ' + response.confidence + '%<br>' +
+                                               '<small class="text-gray-500">Top predictions:<br>';
+                                
+                                // Add top predictions if available
+                                if (response.top_predictions) {
+                                    response.top_predictions.forEach(function(pred) {
+                                        resultHtml += pred.class + ' (' + pred.confidence + '%)<br>';
+                                    });
+                                }
+                                
+                                resultHtml += '</small>';
+                                
+                                $('#recognized_category')
+                                    .html(resultHtml)
+                                    .removeClass('hidden');
                             } else {
-                                $('#recognized_category').text('Error: ' + response.message);
+                                $('#recognized_category')
+                                    .html('Error: ' + (response.error || 'Classification failed'))
+                                    .removeClass('hidden');
                             }
                         },
-                        error: function() {
-                            $('#recognized_category').text('Error occurred during classification.');
+                        error: function(xhr, status, error) {
+                            $('#recognized_category')
+                                .html('Error occurred during classification: ' + error)
+                                .removeClass('hidden');
                         }
                     });
                 }

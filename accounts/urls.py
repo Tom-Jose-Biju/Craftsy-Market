@@ -6,10 +6,25 @@ from . import views
 urlpatterns = [
     path('', views.home, name='home'),
     path('register/', views.register, name='register'),
-    path('google-login/', auth_views.LoginView.as_view(template_name='login.html'), name='google-login'),
+    path('login/', views.login_view, name='login'),
     path('logout/', views.signout, name='logout'),
     path('profile/', views.profile, name='profile'),
-    path('login/', views.login_view, name='login'),
+
+    # Delivery Partner URLs
+    path('delivery-partner/register/', views.delivery_partner_register, name='delivery_partner_register'),
+    
+    # Delivery URLs
+    path('delivery/dashboard/', views.delivery_dashboard, name='delivery_dashboard'),
+    path('delivery/history/', views.delivery_history, name='delivery_history'),
+    path('delivery/tracking/<int:delivery_id>/', views.delivery_tracking, name='delivery_tracking'),
+    path('delivery/earnings/', views.delivery_earnings, name='delivery_earnings'),
+    path('delivery/profile/', views.delivery_profile, name='delivery_profile'),
+    path('delivery/<int:delivery_id>/details/', views.delivery_order_details, name='delivery_order_details'),
+    path('delivery/<int:delivery_id>/update-status/', views.update_delivery_status, name='update_delivery_status'),
+    path('delivery/<int:delivery_id>/mark-delivered/', views.mark_delivery_delivered, name='mark_delivery_delivered'),
+    path('delivery/<int:delivery_id>/location/', views.get_delivery_location, name='get_delivery_location'),
+    path('delivery/<int:delivery_id>/route/', views.get_delivery_route, name='get_delivery_route'),
+    path('delivery/history/export/', views.export_delivery_history, name='export_delivery_history'),
 
     path('artisan_home/', views.artisan_home, name='artisan_home'),
     path('artisan/register/', views.artisan_register, name='artisan_register'),
@@ -32,17 +47,18 @@ urlpatterns = [
     path('admin-dashboard/users/', views.admin_users, name='admin_users'),
     path('admin-dashboard/artisans/', views.admin_artisans, name='admin_artisans'),
     path('admin-dashboard/products/', views.admin_products, name='admin_products'),
+    path('admin-dashboard/unassigned-orders/', views.unassigned_orders, name='unassigned_orders'),
     path('admin-dashboard/add-category/', views.admin_add_category, name='admin_add_category'),
     path('admin-dashboard/edit-category/<int:category_id>/', views.admin_edit_category, name='admin_edit_category'),
     path('admin-dashboard/delete-category/<int:category_id>/', views.admin_delete_category, name='admin_delete_category'),
     path('admin-dashboard/disable-category/<int:category_id>/', views.disable_category, name='admin_disable_category'),
     path('admin-dashboard/enable-category/<int:category_id>/', views.enable_category, name='admin_enable_category'),
+    path('admin-dashboard/assign-delivery/<int:order_id>/', views.assign_delivery, name='assign_delivery'),
 
-    
     path('deactivate-account/', views.deactivate_account, name='deactivate_account'),
 
     path('checkout/', views.checkout, name='checkout'),
-    path('create_checkout_session/', views.create_checkout_session, name='create_checkout_session'),  # Create checkout session
+    path('create_checkout_session/', views.create_checkout_session, name='create_checkout_session'),
     path('payment/success/', views.payment_success, name='payment_success'),
     path('payment/cancel/', views.payment_cancel, name='payment_cancel'),
     
@@ -57,18 +73,12 @@ urlpatterns = [
     path('update-cart-quantity/', views.update_cart_quantity, name='update_cart_quantity'),
     path('wishlist/', views.wishlist, name='wishlist'),
     path('add-to-cart/', views.add_to_cart, name='add_to_cart'),
-    path('remove-from-cart/', views.remove_from_cart, name='remove_from_cart'),
-    path('update-cart-quantity/', views.update_cart_quantity, name='update_cart_quantity'),
     path('add-to-wishlist/', views.add_to_wishlist, name='add_to_wishlist'),
     path('remove-from-wishlist/', views.remove_from_wishlist, name='remove_from_wishlist'),
-    path('get_cart/', views.get_cart, name='get_cart'),
-    path('create_checkout_session/', views.create_checkout_session, name='create_checkout_session'),
-    path('payment_success/', views.payment_success, name='payment_success'),
-    path('payment_cancel/', views.payment_cancel, name='payment_cancel'),
     path('order-history/', views.order_history, name='order_history'),
     path('order-detail/<int:order_id>/', views.order_detail, name='order_detail'),
-    path('submit-review/<int:order_item_id>/', views.submit_review, name='submit_review'),
-
+    path('order/<int:order_id>/update-status/', views.update_order_status, name='update_order_status'),
+    path('order/<int:order_id>/add-tracking/', views.add_tracking_number, name='add_tracking_number'),
 
     path('blogs/', views.customer_blog_view, name='customer_blog_view'),
     path('artisan/blog/write/', views.artisan_blog_write, name='artisan_blog_write'),
@@ -79,9 +89,6 @@ urlpatterns = [
     path('single-product-checkout/<int:product_id>/', views.single_product_checkout, name='single_product_checkout'),
     path('download-product-report/', views.download_product_report, name='download_product_report'),
 
-    path('order/<int:order_id>/update-status/', views.update_order_status, name='update_order_status'),
-    path('order/<int:order_id>/add-tracking/', views.add_tracking_number, name='add_tracking_number'),
-    path('order/<int:order_id>/simulate-delivery/', views.simulate_delivery, name='simulate_delivery'),
     path('submit-review/<int:order_item_id>/', views.submit_review, name='submit_review'),
     path('delete-review/<int:review_id>/', views.delete_review, name='delete_review'),
     path('artisan/earnings/', views.artisan_earnings, name='artisan_earnings'),
@@ -98,8 +105,25 @@ urlpatterns = [
     path('get-artisan-info/<int:artisan_id>/', views.get_artisan_info, name='get_artisan_info'),
     path('artisan-products/<int:artisan_id>/', views.artisan_products_view, name='artisan_products_view'),
     path('order/<int:order_id>/invoice/', views.download_invoice, name='download_invoice'),
+    path('admin/delivery-partners/pending/', views.pending_delivery_partners, name='pending_delivery_partners'),
+    path('admin/delivery-partners/<int:partner_id>/approve/', views.approve_delivery_partner, name='approve_delivery_partner'),
+    path('admin/orders/<int:order_id>/assign-delivery/', views.assign_delivery, name='assign_delivery'),
 
-    # Add these new URL patterns
-    # path('artisan/sales-forecast/<int:artisan_id>/', views.sales_forecast, name='sales_forecast'),
+    # Admin Delivery Partner URLs
+    path('admin-delivery-partners/', views.admin_delivery_partners, name='admin_delivery_partners'),
+    path('admin-delivery-partners/<int:partner_id>/details/', views.admin_delivery_partner_details, name='admin_delivery_partner_details'),
+    path('admin-delivery-partners/<int:partner_id>/suspend/', views.suspend_delivery_partner, name='suspend_delivery_partner'),
+    path('admin-delivery-partners/<int:partner_id>/reactivate/', views.reactivate_delivery_partner, name='reactivate_delivery_partner'),
+
+    # Notification URLs
+    path('notifications/', views.notifications, name='notifications'),
+    path('notifications/unread-count/', views.unread_notifications_count, name='unread_notifications_count'),
+    path('notifications/mark-read/<int:notification_id>/', views.mark_notification_read, name='mark_notification_read'),
+    path('notifications/mark-all-read/', views.mark_all_notifications_read, name='mark_all_notifications_read'),
     
+    path('admin-dashboard/export-unassigned-orders/',views.export_unassigned_orders, name='export_unassigned_orders'),
+
+    # Delivery Partner Selection URLs
+    path('order/<int:order_id>/select-delivery/', views.select_delivery_partner, name='select_delivery_partner'),
+    path('order/<int:order_id>/assign-delivery/<int:partner_id>/', views.assign_delivery_partner, name='assign_delivery_partner'),
 ]

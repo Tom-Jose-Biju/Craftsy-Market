@@ -10,20 +10,28 @@ import numpy as np
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 import io
+from django.conf import settings
 
 class User(AbstractUser):
     USER_TYPE_CHOICES = (
         ('artisan', 'Artisan'),
         ('customer', 'Customer'),
         ('admin', 'Admin'),
+        ('delivery_partner', 'Delivery Partner'),
     )
-    user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, default="customer")
+    user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, default="customer")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     status = models.CharField(max_length=20, default='active')
+    phone_number = models.CharField(max_length=15, blank=True)
+    address = models.TextField(blank=True)
 
     def __str__(self):
         return self.username
+
+    class Meta:
+        db_table = 'auth_user'
+        app_label = 'accounts'
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -231,30 +239,36 @@ class Order(models.Model):
         ('processing', 'Processing'),
         ('shipped', 'Shipped'),
         ('delivered', 'Delivered'),
+        ('cancelled', 'Cancelled'),
     )
     
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='processing')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     shipped_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
-    tracking_number = models.CharField(max_length=100, null=True, blank=True)
-    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tracking_number = models.CharField(max_length=50, null=True, blank=True)
 
-    def update_status(self, new_status):
-        self.status = new_status
-        if new_status == 'shipped' and not self.shipped_at:
-            self.shipped_at = timezone.now()
-        elif new_status == 'delivered' and not self.delivered_at:
-            self.delivered_at = timezone.now()
-        self.save()
-    def simulate_delivery(self):
-        if self.status == 'processing':
-            self.update_status('shipped')
-        elif self.status == 'shipped':
-            self.update_status('delivered')
-        self.save()
+    def __str__(self):
+        return f"Order #{self.id} by {self.user.username}"
+
+    def get_status_display(self):
+        return dict(self.STATUS_CHOICES).get(self.status, self.status)
+
+    def can_simulate_delivery(self):
+        return self.status in ['processing', 'shipped'] and not self.delivered_at
+
+    @property
+    def status_progress(self):
+        progress_map = {
+            'processing': 25,
+            'shipped': 75,
+            'delivered': 100,
+            'cancelled': 0
+        }
+        return progress_map.get(self.status.lower(), 0)
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
@@ -263,7 +277,7 @@ class OrderItem(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):
-        return f"{self.quantity} x {self.product.name} in Order {self.order.id}"
+        return f"{self.quantity}x {self.product.name} in Order #{self.order.id}"
 
 class Cart(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -306,3 +320,196 @@ class ChatMessage(models.Model):
         return f'{self.user.username}: {self.message}'
     class Meta:
         ordering = ['timestamp']
+
+class DeliveryPartner(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    vehicle_type = models.CharField(max_length=50)
+    vehicle_number = models.CharField(max_length=50)
+    license_number = models.CharField(max_length=50)
+    phone_number = models.CharField(max_length=15)
+    profile_picture = models.ImageField(upload_to='delivery_partners/profile_pics/', null=True, blank=True)
+    license_image = models.ImageField(upload_to='delivery_partners/licenses/', null=True, blank=True)
+    id_proof = models.ImageField(upload_to='delivery_partners/id_proofs/', null=True, blank=True)
+    vehicle_registration = models.ImageField(upload_to='delivery_partners/vehicle_registrations/', null=True, blank=True)
+    insurance_document = models.ImageField(upload_to='delivery_partners/insurance/', null=True, blank=True)
+    status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('suspended', 'Suspended')
+    ], default='pending')
+    is_available = models.BooleanField(default=True)
+    current_location_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    current_location_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} - {self.vehicle_type}"
+
+    def update_location(self, latitude, longitude):
+        self.current_location_lat = latitude
+        self.current_location_lng = longitude
+        self.save()
+
+    def update_rating(self):
+        ratings = self.delivery_ratings.all()
+        if ratings:
+            avg_rating = sum(r.rating for r in ratings) / len(ratings)
+            self.rating = round(avg_rating, 2)
+            self.save()
+
+class Delivery(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('picked_up', 'Picked Up'),
+        ('in_transit', 'In Transit'),
+        ('out_for_delivery', 'Out for Delivery'),
+        ('delivered', 'Delivered'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled')
+    )
+
+    order = models.OneToOneField('Order', on_delete=models.CASCADE, related_name='delivery')
+    delivery_partner = models.ForeignKey(DeliveryPartner, on_delete=models.SET_NULL, null=True, related_name='deliveries')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    delivery_address = models.TextField()
+    delivery_instructions = models.TextField(blank=True)
+    expected_delivery_time = models.DateTimeField()
+    actual_delivery_time = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Delivery for Order #{self.order.id}"
+
+    def get_delivery_time(self):
+        if self.actual_delivery_time and self.created_at:
+            time_diff = self.actual_delivery_time - self.created_at
+            return round(time_diff.total_seconds() / 3600, 1)  # Returns hours
+        return None
+
+    def mark_as_delivered(self):
+        if self.status != 'delivered':
+            self.status = 'delivered'
+            self.actual_delivery_time = timezone.now()
+            self.save()
+            
+            # Update order status
+            self.order.status = 'delivered'
+            self.order.delivered_at = timezone.now()
+            self.order.save()
+            
+            # Update delivery partner availability
+            if self.delivery_partner:
+                self.delivery_partner.is_available = True
+                self.delivery_partner.save()
+
+class DeliveryStatusHistory(models.Model):
+    delivery = models.ForeignKey(Delivery, on_delete=models.CASCADE, related_name='status_history')
+    status = models.CharField(max_length=20, choices=Delivery.STATUS_CHOICES)
+    notes = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Status update for Delivery #{self.delivery.id}: {self.status}"
+
+class DeliveryRating(models.Model):
+    delivery = models.ForeignKey(Delivery, on_delete=models.CASCADE, related_name='ratings')
+    delivery_partner = models.ForeignKey(DeliveryPartner, on_delete=models.CASCADE, related_name='delivery_ratings')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['delivery', 'user']
+
+    def __str__(self):
+        return f"Rating for {self.delivery} by {self.user.username}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.delivery_partner.update_rating()
+
+class DeliveryRoute(models.Model):
+    delivery = models.ForeignKey(Delivery, on_delete=models.CASCADE, related_name='route_points')
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['timestamp']
+
+    def __str__(self):
+        return f"Route point for {self.delivery} at {self.timestamp}"
+
+class Notification(models.Model):
+    NOTIFICATION_TYPES = [
+        ('delivery_assignment', 'Delivery Assignment'),
+        ('delivery_update', 'Delivery Update'),
+        ('order_status', 'Order Status'),
+        ('system', 'System Notification'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    notification_type = models.CharField(max_length=50, choices=NOTIFICATION_TYPES)
+    reference_id = models.IntegerField(null=True, blank=True)  # ID of related object (order, delivery, etc.)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        
+    def __str__(self):
+        return f"{self.notification_type} - {self.title} for {self.user.username}"
+        
+    def mark_as_read(self):
+        self.is_read = True
+        self.save()
+
+class DeliveryEarning(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('processed', 'Processed'),
+        ('paid', 'Paid'),
+        ('failed', 'Failed')
+    )
+
+    delivery = models.OneToOneField(Delivery, on_delete=models.CASCADE, related_name='earning')
+    delivery_partner = models.ForeignKey(DeliveryPartner, on_delete=models.CASCADE, related_name='earnings')
+    base_amount = models.DecimalField(max_digits=10, decimal_places=2)  # 20% of order total
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2)  # Base fee + distance fee
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    artisan_share = models.DecimalField(max_digits=10, decimal_places=2)  # 70% of order total
+    platform_fee = models.DecimalField(max_digits=10, decimal_places=2)   # 10% of order total
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"Earnings for Delivery #{self.delivery.id}"
+
+    def mark_as_processed(self):
+        self.status = 'processed'
+        self.processed_at = timezone.now()
+        self.save()
+
+    def mark_as_paid(self):
+        self.status = 'paid'
+        self.paid_at = timezone.now()
+        self.save()
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['delivery_partner', 'status']),
+            models.Index(fields=['created_at']),
+        ]

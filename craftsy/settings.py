@@ -49,11 +49,13 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',
-    'accounts',
     'widget_tweaks',
     'social_django',
     'channels',
+    'accounts.apps.AccountsConfig',
 ]
+
+AUTH_USER_MODEL = 'accounts.User'
 
 
 MIDDLEWARE = [
@@ -93,6 +95,7 @@ TEMPLATES = [
                 'django.template.context_processors.csrf',
                 'social_django.context_processors.backends',
                 'social_django.context_processors.login_redirect',
+                'accounts.context_processors.notifications',
             ],
         },
     },

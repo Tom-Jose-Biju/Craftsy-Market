@@ -1,16 +1,100 @@
+{% load static %}
+
 <div class="order-card">
     <div class="order-header">
-        <h5>Order #{{ order.id }}</h5>
-        <span class="order-status status-{{ order.status|lower }}">{{ order.get_status_display }}</span>
+        <div>
+            <h5 class="mb-0">Order #{{ order.id }}</h5>
+            <small class="text-muted">{{ order.created_at|date:"F d, Y" }}</small>
+        </div>
+        <span class="order-status status-{{ order.status|lower }}">
+            {{ order.get_status_display }}
+        </span>
     </div>
-    <p><strong>Date:</strong> {{ order.created_at|date:"F d, Y" }}</p>
-    <p><strong>Total:</strong> ₹{{ order.total_price }}</p>
-    <div class="order-items">
+
+    <div class="order-items mt-3">
         {% for item in order.items.all %}
-            <p>{{ item.product.name }} (x{{ item.quantity }})</p>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <span class="fw-bold">{{ item.product.name }}</span>
+                <small class="text-muted d-block">Quantity: {{ item.quantity }}</small>
+            </div>
+            <span>₹{{ item.price }}</span>
+        </div>
         {% endfor %}
     </div>
-    <div class="order-total">
-        <a href="{% url 'order_detail' order.id %}" class="btn btn-primary btn-sm">View Order Details</a>
+
+    <!-- Delivery Information -->
+    {% if order.delivery %}
+    <div class="delivery-info mt-3 p-3 bg-base-200 rounded">
+        <h6 class="mb-2"><i class="fas fa-truck me-2"></i>Delivery Details</h6>
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <p class="mb-1"><small>Partner: {{ order.delivery.delivery_partner.user.get_full_name }}</small></p>
+                <p class="mb-1"><small>Status: {{ order.delivery.get_status_display }}</small></p>
+                {% if order.delivery.expected_delivery_time %}
+                <p class="mb-1"><small>Expected: {{ order.delivery.expected_delivery_time|date:"M d, H:i" }}</small></p>
+                {% endif %}
+                {% if order.tracking_number %}
+                <p class="mb-1"><small>Tracking: {{ order.tracking_number }}</small></p>
+                {% endif %}
+            </div>
+            {% if order.delivery.status != 'delivered' %}
+            <div class="delivery-status-badge {{ order.delivery.status }}">
+                {{ order.delivery.get_status_display }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="order-footer mt-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <span class="fw-bold">Total:</span>
+                <span class="fs-5">₹{{ order.total_price }}</span>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'order_detail' order.id %}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-eye me-1"></i>View Details
+                </a>
+                {% if order.status == 'delivered' %}
+                <a href="{% url 'download_invoice' order.id %}" class="btn btn-info btn-sm">
+                    <i class="fas fa-file-pdf me-1"></i>Invoice
+                </a>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
+
+<style>
+.delivery-status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.delivery-status-badge.pending {
+    background-color: #ffd700;
+    color: #000;
+}
+
+.delivery-status-badge.in_transit {
+    background-color: #1e90ff;
+    color: #fff;
+}
+
+.delivery-status-badge.delivered {
+    background-color: #32cd32;
+    color: #fff;
+}
+
+.order-card {
+    transition: transform 0.2s;
+}
+
+.order-card:hover {
+    transform: translateY(-2px);
+}
+</style>

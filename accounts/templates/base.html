@@ -1,0 +1,10 @@
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'notifications' %}">
+        <i class="fas fa-bell"></i>
+        {% if unread_notifications_count > 0 %}
+            <span id="notificationCount" class="badge bg-danger">{{ unread_notifications_count }}</span>
+        {% else %}
+            <span id="notificationCount" class="badge bg-danger" style="display: none;">0</span>
+        {% endif %}
+    </a>
+</li> 

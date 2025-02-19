@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Partner Details - Craftsy</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.5.0/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="bg-base-200">
+    <div class="drawer lg:drawer-open">
+        <input id="my-drawer-2" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content flex flex-col">
+            <!-- Navbar -->
+            <div class="navbar bg-base-100 shadow-lg">
+                <div class="flex-none lg:hidden">
+                    <label for="my-drawer-2" class="btn btn-square btn-ghost">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </label>
+                </div> 
+                <div class="flex-1">
+                    <a href="{% url 'admin_delivery_partners' %}" class="btn btn-ghost">
+                        <i class="fas fa-arrow-left mr-2"></i>Back to Partners
+                    </a>
+                </div>
+                <div class="flex-none">
+                    <a href="{% url 'logout' %}" class="btn btn-ghost">Logout</a>
+                </div>
+            </div>
+            
+            <!-- Page content -->
+            <div class="p-4">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-3xl font-bold">{{ partner.user.get_full_name }}</h1>
+                            {% if partner.status == 'approved' %}
+                            <div class="badge badge-success gap-1">
+                                <i class="fas fa-check-circle"></i>
+                                Verified Partner
+                            </div>
+                            {% endif %}
+                        </div>
+                        <p class="text-gray-500">Joined {{ partner.created_at|date:"F d, Y" }}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        {% if partner.status == 'suspended' %}
+                        <form method="post" action="{% url 'reactivate_delivery_partner' partner.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success">Reactivate Partner</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="{% url 'suspend_delivery_partner' partner.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning">Suspend Partner</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Partner Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div class="stat bg-primary text-primary-content">
+                        <div class="stat-title">Total Deliveries</div>
+                        <div class="stat-value">{{ total_deliveries }}</div>
+                    </div>
+                    <div class="stat bg-secondary text-secondary-content">
+                        <div class="stat-title">Completed Deliveries</div>
+                        <div class="stat-value">{{ completed_deliveries }}</div>
+                    </div>
+                    <div class="stat bg-accent text-accent-content">
+                        <div class="stat-title">On-Time Delivery</div>
+                        <div class="stat-value">{{ on_time_percentage }}%</div>
+                    </div>
+                    <div class="stat bg-neutral text-neutral-content">
+                        <div class="stat-title">Average Rating</div>
+                        <div class="stat-value">{{ partner.rating }}</div>
+                    </div>
+                </div>
+
+                <!-- Partner Details -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-base-100 p-6 rounded-lg shadow-lg">
+                        <h2 class="text-2xl font-bold mb-4">Personal Information</h2>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="font-bold">Email</p>
+                                <p>{{ partner.user.email }}</p>
+                            </div>
+                            <div>
+                                <p class="font-bold">Phone</p>
+                                <p>{{ partner.user.phone_number }}</p>
+                            </div>
+                            <div>
+                                <p class="font-bold">Vehicle Type</p>
+                                <p>{{ partner.vehicle_type }}</p>
+                            </div>
+                            <div>
+                                <p class="font-bold">Vehicle Number</p>
+                                <p>{{ partner.vehicle_number }}</p>
+                            </div>
+                            <div>
+                                <p class="font-bold">License Number</p>
+                                <p>{{ partner.license_number }}</p>
+                            </div>
+                            <div>
+                                <p class="font-bold">Status</p>
+                                <span class="badge {% if partner.status == 'approved' %}badge-success{% elif partner.status == 'suspended' %}badge-error{% else %}badge-warning{% endif %}">
+                                    {{ partner.get_status_display }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-base-100 p-6 rounded-lg shadow-lg">
+                        <h2 class="text-2xl font-bold mb-4">Documents</h2>
+                        <div class="grid grid-cols-2 gap-4">
+                            {% if partner.license_image %}
+                            <div>
+                                <p class="font-bold mb-2">License</p>
+                                <a href="{{ partner.license_image.url }}" target="_blank" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye mr-2"></i>View License
+                                </a>
+                            </div>
+                            {% endif %}
+                            {% if partner.id_proof %}
+                            <div>
+                                <p class="font-bold mb-2">ID Proof</p>
+                                <a href="{{ partner.id_proof.url }}" target="_blank" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye mr-2"></i>View ID
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Deliveries -->
+                <div class="bg-base-100 p-6 rounded-lg shadow-lg mb-8">
+                    <h2 class="text-2xl font-bold mb-4">Recent Deliveries</h2>
+                    <div class="overflow-x-auto">
+                        <table class="table w-full">
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Customer</th>
+                                    <th>Delivery Date</th>
+                                    <th>Status</th>
+                                    <th>On Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for delivery in recent_deliveries %}
+                                <tr>
+                                    <td>#{{ delivery.order.id }}</td>
+                                    <td>{{ delivery.order.user.get_full_name }}</td>
+                                    <td>{{ delivery.created_at|date:"M d, Y" }}</td>
+                                    <td>
+                                        <span class="badge {% if delivery.status == 'delivered' %}badge-success{% elif delivery.status == 'failed' %}badge-error{% else %}badge-warning{% endif %}">
+                                            {{ delivery.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if delivery.status == 'delivered' %}
+                                            {% if delivery.actual_delivery_time <= delivery.expected_delivery_time %}
+                                            <i class="fas fa-check text-success"></i>
+                                            {% else %}
+                                            <i class="fas fa-times text-error"></i>
+                                            {% endif %}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No deliveries yet</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Recent Ratings -->
+                <div class="bg-base-100 p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-bold mb-4">Recent Ratings & Reviews</h2>
+                    <div class="grid grid-cols-1 gap-4">
+                        {% for rating in ratings %}
+                        <div class="card bg-base-200">
+                            <div class="card-body">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="font-bold">{{ rating.user.get_full_name }}</h3>
+                                        <p class="text-sm text-gray-500">{{ rating.created_at|date:"M d, Y" }}</p>
+                                    </div>
+                                    <div class="rating rating-sm">
+                                        {% for i in "12345" %}
+                                        <input type="radio" class="mask mask-star-2 bg-orange-400" {% if forloop.counter <= rating.rating %}checked{% endif %} disabled/>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% if rating.comment %}
+                                <p class="mt-2">{{ rating.comment }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% empty %}
+                        <p class="text-center">No ratings yet</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="drawer-side">
+            <label for="my-drawer-2" class="drawer-overlay"></label> 
+            <ul class="menu p-4 w-80 h-full bg-base-200 text-base-content">
+                <li><a href="{% url 'admin_dashboard' %}"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
+                <li><a href="{% url 'admin_users' %}"><i class="fas fa-users mr-2"></i>Users</a></li>
+                <li><a href="{% url 'admin_artisans' %}"><i class="fas fa-palette mr-2"></i>Artisans</a></li>
+                <li><a href="{% url 'admin_delivery_partners' %}" class="active"><i class="fas fa-truck mr-2"></i>Delivery Partners</a></li>
+                <li><a href="{% url 'admin_products' %}"><i class="fas fa-box mr-2"></i>Products</a></li>
+                <li><a href="{% url 'admin_add_category' %}"><i class="fas fa-plus mr-2"></i>Add Category</a></li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html> 

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Partners Management - Craftsy</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.5.0/dist/full.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="bg-base-200">
+    <div class="drawer lg:drawer-open">
+        <input id="my-drawer-2" type="checkbox" class="drawer-toggle" />
+        <div class="drawer-content flex flex-col">
+            <!-- Navbar -->
+            <div class="navbar bg-base-100 shadow-lg">
+                <div class="flex-none lg:hidden">
+                    <label for="my-drawer-2" class="btn btn-square btn-ghost">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-6 h-6 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </label>
+                </div> 
+                <div class="flex-1">
+                    <a class="btn btn-ghost normal-case text-xl">Delivery Partners Management</a>
+                </div>
+                <div class="flex-none">
+                    <a href="{% url 'logout' %}" class="btn btn-ghost">Logout</a>
+                </div>
+            </div>
+            
+            <!-- Page content -->
+            <div class="p-4">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-3xl font-bold">Delivery Partners</h1>
+                    <div class="stats shadow">
+                        <div class="stat">
+                            <div class="stat-title">Total Partners</div>
+                            <div class="stat-value">{{ total_partners }}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title">Pending Approval</div>
+                            <div class="stat-value text-warning">{{ pending_partners }}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title">Active Partners</div>
+                            <div class="stat-value text-success">{{ active_partners }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pending Approvals Section -->
+                <div class="bg-base-100 p-6 rounded-lg shadow-lg mb-8">
+                    <h2 class="text-2xl font-bold mb-4">Pending Approvals</h2>
+                    <div class="overflow-x-auto">
+                        <table class="table w-full">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Vehicle Type</th>
+                                    <th>License Number</th>
+                                    <th>Documents</th>
+                                    <th>Applied Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for partner in pending_partners_list %}
+                                <tr>
+                                    <td>{{ partner.user.get_full_name|default:partner.user.username }}</td>
+                                    <td>{{ partner.vehicle_type }}</td>
+                                    <td>{{ partner.license_number }}</td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            {% if partner.license_image %}
+                                            <a href="{{ partner.license_image.url }}" target="_blank" class="btn btn-sm btn-info">
+                                                <i class="fas fa-id-card mr-1"></i> License
+                                            </a>
+                                            {% endif %}
+                                            {% if partner.id_proof %}
+                                            <a href="{{ partner.id_proof.url }}" target="_blank" class="btn btn-sm btn-info">
+                                                <i class="fas fa-passport mr-1"></i> ID
+                                            </a>
+                                            {% endif %}
+                                            {% if partner.vehicle_registration %}
+                                            <a href="{{ partner.vehicle_registration.url }}" target="_blank" class="btn btn-sm btn-info">
+                                                <i class="fas fa-car mr-1"></i> Vehicle
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>{{ partner.created_at|date:"M d, Y" }}</td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <form method="post" class="inline" onsubmit="return confirm('Are you sure you want to approve this delivery partner?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="partner_id" value="{{ partner.id }}">
+                                                <input type="hidden" name="action" value="approve">
+                                                <button type="submit" class="btn btn-success btn-sm">
+                                                    <i class="fas fa-check mr-1"></i> Approve
+                                                </button>
+                                            </form>
+                                            <form method="post" class="inline" onsubmit="return confirm('Are you sure you want to reject this delivery partner?');">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="partner_id" value="{{ partner.id }}">
+                                                <input type="hidden" name="action" value="reject">
+                                                <button type="submit" class="btn btn-error btn-sm">
+                                                    <i class="fas fa-times mr-1"></i> Reject
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center">No pending approvals</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Active Partners Section -->
+                <div class="bg-base-100 p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-bold mb-4">Active Partners</h2>
+                    <div class="overflow-x-auto">
+                        <table class="table w-full">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Vehicle Type</th>
+                                    <th>Total Deliveries</th>
+                                    <th>Rating</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for partner in active_partners_list %}
+                                <tr>
+                                    <td>{{ partner.user.get_full_name|default:partner.user.username }}</td>
+                                    <td>{{ partner.vehicle_type }}</td>
+                                    <td>{{ partner.total_deliveries }}</td>
+                                    <td>
+                                        <div class="rating rating-sm">
+                                            {% with ''|center:5 as range %}
+                                            {% for _ in range %}
+                                            <input type="radio" class="mask mask-star-2 bg-orange-400" 
+                                                   {% if forloop.counter <= partner.rating|default:0 %}checked{% endif %} disabled/>
+                                            {% endfor %}
+                                            {% endwith %}
+                                            <span class="ml-2">{{ partner.rating|default:0|floatformat:1 }}</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if partner.is_available %}badge-success{% else %}badge-warning{% endif %}">
+                                            {{ partner.is_available|yesno:"Available,Busy" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <a href="{% url 'admin_delivery_partner_details' partner.id %}" class="btn btn-info btn-sm">
+                                                <i class="fas fa-eye mr-1"></i> View Details
+                                            </a>
+                                            <button class="btn btn-warning btn-sm" onclick="suspendPartner({{ partner.id }})">
+                                                <i class="fas fa-ban mr-1"></i> Suspend
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center">No active partners</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="drawer-side">
+            <label for="my-drawer-2" class="drawer-overlay"></label> 
+            <ul class="menu p-4 w-80 h-full bg-base-200 text-base-content">
+                <li><a href="{% url 'admin_dashboard' %}"><i class="fas fa-tachometer-alt mr-2"></i>Dashboard</a></li>
+                <li><a href="{% url 'admin_users' %}"><i class="fas fa-users mr-2"></i>Users</a></li>
+                <li><a href="{% url 'admin_artisans' %}"><i class="fas fa-palette mr-2"></i>Artisans</a></li>
+                <li><a href="{% url 'admin_delivery_partners' %}" class="active"><i class="fas fa-truck mr-2"></i>Delivery Partners</a></li>
+                <li><a href="{% url 'admin_products' %}"><i class="fas fa-box mr-2"></i>Products</a></li>
+                <li><a href="{% url 'admin_add_category' %}"><i class="fas fa-plus mr-2"></i>Add Category</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function suspendPartner(partnerId) {
+            if (confirm('Are you sure you want to suspend this delivery partner?')) {
+                fetch(`/admin-delivery-partners/${partnerId}/suspend/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Failed to suspend partner');
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html> 

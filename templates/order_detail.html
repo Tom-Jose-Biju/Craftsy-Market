@@ -66,6 +66,48 @@
         .modal-footer {
             border-top: 1px solid #3a3a3a;
         }
+        .timeline {
+            list-style: none;
+            padding: 0;
+            position: relative;
+        }
+        .timeline:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 20px;
+            height: 100%;
+            width: 2px;
+            background: #ddd;
+        }
+        .timeline-item {
+            margin-bottom: 20px;
+            position: relative;
+            padding-left: 45px;
+        }
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #007bff;
+        }
+        .timeline-date {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .timeline-status {
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .timeline-notes {
+            margin-top: 5px;
+            color: #777;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
@@ -108,12 +150,6 @@
                 {{ order.get_status_display }}
             </span>
         </div>
-        {% if can_simulate_delivery %}
-        <form action="{% url 'simulate_delivery' order.id %}" method="post" class="mt-3">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-primary">Simulate Delivery</button>
-        </form>
-    {% endif %}
         <div class="order-info">
             <div class="row">
                 <div class="col-md-6">
@@ -121,95 +157,155 @@
                 </div>
                 <div class="col-md-6">
                     <p><i class="fas fa-tag me-2"></i>Total: ${{ order.total_price }}</p>
-                    <p><i class="fas fa-credit-card me-2"></i>Payment Method: Credit Card (ending in 1234)</p>
+                    <p><i class="fas fa-credit-card me-2"></i>Payment Method: Credit Card</p>
                 </div>
             </div>
+
+            <!-- Delivery Information Section -->
+            {% if delivery %}
+            <div class="delivery-info mt-4">
+                <h3><i class="fas fa-truck me-2"></i>Delivery Information</h3>
+                <div class="card bg-base-200">
+                    <div class="card-body">
+                        <p><strong>Status:</strong> {{ delivery.get_status_display }}</p>
+                        <p><strong>Delivery Partner:</strong> {{ delivery.delivery_partner.user.get_full_name }}</p>
+                        <p><strong>Expected Delivery:</strong> {{ delivery.expected_delivery_time|date:"F d, Y H:i" }}</p>
+                        {% if delivery.actual_delivery_time %}
+                            <p><strong>Delivered At:</strong> {{ delivery.actual_delivery_time|date:"F d, Y H:i" }}</p>
+                        {% endif %}
+                        
+                        <!-- Delivery Status Timeline -->
+                        {% if delivery_status_history %}
+                        <div class="delivery-timeline mt-3">
+                            <h4>Delivery Status Updates</h4>
+                            <ul class="timeline">
+                                {% for status in delivery_status_history %}
+                                <li class="timeline-item">
+                                    <span class="timeline-date">{{ status.timestamp|date:"M d, H:i" }}</span>
+                                    <span class="timeline-status">{{ status.get_status_display }}</span>
+                                    {% if status.notes %}
+                                        <p class="timeline-notes">{{ status.notes }}</p>
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% elif user.is_staff and order.status == 'processing' %}
+            <div class="mt-3">
+                <a href="{% url 'assign_delivery' order.id %}" class="btn btn-primary">
+                    <i class="fas fa-truck me-2"></i>Assign Delivery Partner
+                </a>
+            </div>
+            {% endif %}
+
             <div class="mt-3">
                 <p><i class="fas fa-map-marker-alt me-2"></i>Shipping Address:</p>
                 <address>
                     {{ profile.user.get_full_name }}<br>
-                    {{ profile.address_line1 }}<br>
+                    {{ profile.street_address }}<br>
                     {% if profile.address_line2 %}{{ profile.address_line2 }}<br>{% endif %}
                     {{ profile.city }}, {{ profile.state }} {{ profile.postal_code }}<br>
                     {{ profile.country }}
                 </address>
             </div>
+
             {% if order.tracking_number %}
-            <p><i class="fas fa-truck me-2"></i>Tracking Number: {{ order.tracking_number }}</p>
-        {% endif %}
-        
-        {% if user.is_staff %}
-            {% if order.status == 'shipped' and not order.tracking_number %}
-                <form action="{% url 'add_tracking_number' order.id %}" method="post" class="mt-3">
-                    {% csrf_token %}
-                    <input type="text" name="tracking_number" placeholder="Enter tracking number" class="form-control">
-                    <button type="submit" class="btn btn-primary mt-2">Add Tracking Number</button>
-                </form>
+                <p><i class="fas fa-truck me-2"></i>Tracking Number: {{ order.tracking_number }}</p>
             {% endif %}
+
+            {% if user.is_staff %}
+                {% if order.status == 'shipped' and not order.tracking_number %}
+                    <form action="{% url 'add_tracking_number' order.id %}" method="post" class="mt-3">
+                        {% csrf_token %}
+                        <input type="text" name="tracking_number" placeholder="Enter tracking number" class="form-control">
+                        <button type="submit" class="btn btn-primary mt-2">Add Tracking Number</button>
+                    </form>
+                {% endif %}
+            {% endif %}
+
+            <div class="order-items">
+                <h3 class="mb-3"><i class="fas fa-box-open me-2"></i>Items</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Product</th>
+                            <th scope="col">Quantity</th>
+                            <th scope="col">Price</th>
+                            <th scope="col">Review</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order_items %}
+                        <tr>
+                            <td>{{ item.product.name }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>₹{{ item.price }}</td>
+                            <td>
+                                {% if order.status == 'delivered' %}
+                                    <h5>Reviews</h5>
+                                    {% for review in item.reviews %}
+                                        <div class="review mb-3">
+                                            <p><strong>Rating:</strong> {{ review.rating }}</p>
+                                            <p><strong>Comment:</strong> {{ review.comment }}</p>
+                                            <p><small>By: {{ review.user.username }} on {{ review.created_at|date:"F d, Y" }}</small></p>
+                                            {% if review.user == user %}
+                                                <form action="{% url 'delete_review' review.id %}" method="post" style="display: inline;">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this review?')">Delete Review</button>
+                                                </form>
+                                            {% endif %}
+                                        </div>
+                                    {% empty %}
+                                        <p>No reviews yet.</p>
+                                    {% endfor %}
+
+                                    <h5>Write a Review</h5>
+                                    <form class="review-form" action="{% url 'submit_review' item.id %}" method="post">
+                                        {% csrf_token %}
+                                        <div class="mb-2">
+                                            <label for="rating-{{ item.id }}" class="form-label">Rating (1-5)</label>
+                                            <input type="number" class="form-control" id="rating-{{ item.id }}" name="rating" min="1" max="5" required>
+                                        </div>
+                                        <div class="mb-2">
+                                            <label for="comment-{{ item.id }}" class="form-label">Comment</label>
+                                            <textarea class="form-control" id="comment-{{ item.id }}" name="comment" rows="2" required></textarea>
+                                        </div>
+                                        <button type="submit" class="btn btn-sm btn-primary">Submit Review</button>
+                                    </form>
+                                {% else %}
+                                    <p>Reviews available after delivery</p>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        
+            <!-- Order Progress Bar -->
+            <div class="progress mt-4">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                     role="progressbar" 
+                     style="width: {{ status_progress }}%;" 
+                     aria-valuenow="{{ status_progress }}" 
+                     aria-valuemin="0" 
+                     aria-valuemax="100">
+                    {{ order.get_status_display }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="order-actions mt-4">
+        {% if order.status == 'processing' and user.is_staff %}
+        <a href="{% url 'assign_delivery' order.id %}" class="btn btn-primary">
+            <i class="fas fa-truck me-2"></i>Assign Delivery Partner
+        </a>
         {% endif %}
-
-        <div class="order-items">
-            <h3 class="mb-3"><i class="fas fa-box-open me-2"></i>Items</h3>
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th scope="col">Product</th>
-                        <th scope="col">Quantity</th>
-                        <th scope="col">Price</th>
-                        <th scope="col">Review</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in order_items %}
-                    <tr>
-                        <td>{{ item.product.name }}</td>
-                        <td>{{ item.quantity }}</td>
-                        <td>₹{{ item.price }}</td>
-                        <td>
-                            {% if order.status == 'delivered' %}
-                                <h5>Reviews</h5>
-                                {% for review in item.reviews %}
-                                    <div class="review mb-3">
-                                        <p><strong>Rating:</strong> {{ review.rating }}</p>
-                                        <p><strong>Comment:</strong> {{ review.comment }}</p>
-                                        <p><small>By: {{ review.user.username }} on {{ review.created_at|date:"F d, Y" }}</small></p>
-                                        {% if review.user == user %}
-                                            <form action="{% url 'delete_review' review.id %}" method="post" style="display: inline;">
-                                                {% csrf_token %}
-                                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this review?')">Delete Review</button>
-                                            </form>
-                                        {% endif %}
-                                    </div>
-                                {% empty %}
-                                    <p>No reviews yet.</p>
-                                {% endfor %}
-
-                                <h5>Write a Review</h5>
-                                <form class="review-form" action="{% url 'submit_review' item.id %}" method="post">
-                                    {% csrf_token %}
-                                    <div class="mb-2">
-                                        <label for="rating-{{ item.id }}" class="form-label">Rating (1-5)</label>
-                                        <input type="number" class="form-control" id="rating-{{ item.id }}" name="rating" min="1" max="5" required>
-                                    </div>
-                                    <div class="mb-2">
-                                        <label for="comment-{{ item.id }}" class="form-label">Comment</label>
-                                        <textarea class="form-control" id="comment-{{ item.id }}" name="comment" rows="2" required></textarea>
-                                    </div>
-                                    <button type="submit" class="btn btn-sm btn-primary">Submit Review</button>
-                                </form>
-                            {% else %}
-                                <p>Reviews available after delivery</p>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    
-        <div class="progress">
-            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: {{ order.status_progress|default:0 }}%;" aria-valuenow="{{ order.status_progress|default:0 }}" aria-valuemin="0" aria-valuemax="100"></div>
-        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

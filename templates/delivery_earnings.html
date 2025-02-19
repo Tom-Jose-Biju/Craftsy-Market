@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Earnings - Craftsy</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        .navbar {
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .stat-card {
+            transition: transform 0.3s;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        .earnings-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .table {
+            color: #e0e0e0;
+        }
+        .table thead th {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .table td {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .rating-stars {
+            color: #ffc107;
+        }
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+        .status-pending { background-color: #ffc107; color: #000; }
+        .status-processed { background-color: #17a2b8; color: #fff; }
+        .status-paid { background-color: #28a745; color: #fff; }
+        .status-failed { background-color: #dc3545; color: #fff; }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'delivery_dashboard' %}">
+                <i class="fas fa-truck me-2"></i>Craftsy Delivery
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'delivery_dashboard' %}">
+                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'delivery_history' %}">
+                            <i class="fas fa-history me-2"></i>History
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{% url 'delivery_earnings' %}">
+                            <i class="fas fa-wallet me-2"></i>Earnings
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'delivery_profile' %}">
+                            <i class="fas fa-user me-2"></i>Profile
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="margin-top: 80px;">
+        <!-- Performance Overview -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2 class="mb-4">Earnings Dashboard</h2>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <h6 class="card-title text-muted">Total Earnings</h6>
+                        <div class="earnings-value">₹{{ performance_metrics.total_earnings|floatformat:2 }}</div>
+                        <small class="text-muted">Lifetime earnings</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <h6 class="card-title text-muted">Total Deliveries</h6>
+                        <div class="earnings-value">{{ performance_metrics.total_deliveries }}</div>
+                        <small class="text-muted">Completed deliveries</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <h6 class="card-title text-muted">Average Rating</h6>
+                        <div class="earnings-value">
+                            {{ performance_metrics.avg_rating|floatformat:1 }}
+                            <small class="rating-stars">
+                                {% with ''|center:performance_metrics.avg_rating|floatformat:0 as stars %}
+                                {% for _ in stars %}★{% endfor %}
+                                {% endwith %}
+                            </small>
+                        </div>
+                        <small class="text-muted">Customer satisfaction</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <h6 class="card-title text-muted">Avg. Per Delivery</h6>
+                        <div class="earnings-value">₹{{ performance_metrics.avg_earnings_per_delivery|floatformat:2 }}</div>
+                        <small class="text-muted">Average earnings</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Earnings Chart -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Monthly Earnings</h5>
+                        <canvas id="monthlyEarningsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Earnings -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Recent Deliveries</h5>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Order ID</th>
+                                        <th>Date</th>
+                                        <th>Base Amount</th>
+                                        <th>Delivery Fee</th>
+                                        <th>Total</th>
+                                        <th>Rating</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for delivery in delivery_details %}
+                                    <tr>
+                                        <td>#{{ delivery.order_id }}</td>
+                                        <td>{{ delivery.timestamp|date:"M d, Y" }}</td>
+                                        <td>₹{{ delivery.delivery_share|floatformat:2 }}</td>
+                                        <td>₹{{ delivery.delivery_fee|floatformat:2 }}</td>
+                                        <td>₹{{ delivery.total|floatformat:2 }}</td>
+                                        <td>
+                                            <span class="rating-stars">
+                                                {% with ''|center:delivery.rating|floatformat:0 as stars %}
+                                                {% for _ in stars %}★{% endfor %}
+                                                {% endwith %}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Chart initialization -->
+    <script>
+        // Monthly earnings chart
+        const monthlyData = {{ monthly_earnings|safe }};
+        const labels = monthlyData.map(entry => {
+            const date = new Date(entry.month);
+            return date.toLocaleDateString('default', { month: 'short', year: 'numeric' });
+        });
+        const earnings = monthlyData.map(entry => entry.total_earnings);
+
+        const ctx = document.getElementById('monthlyEarningsChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Monthly Earnings (₹)',
+                    data: earnings,
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            color: '#e0e0e0'
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#e0e0e0'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#e0e0e0'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html> 
