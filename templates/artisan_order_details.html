@@ -115,6 +115,12 @@
                     {% endif %}
                 {% endfor %}
             </ul>
+            <td>
+                <span class="fw-bold">#{{ order.id }}</span>
+                <a href="{% url 'order_detail' order.id %}" class="btn btn-sm btn-outline-info ms-2">
+                    <i class="fas fa-eye"></i> View Details
+                </a>
+            </td>
         </div>
         {% empty %}
         <p>No orders found.</p>

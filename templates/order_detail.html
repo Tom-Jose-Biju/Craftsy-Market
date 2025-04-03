@@ -108,6 +108,40 @@
             color: #777;
             font-size: 0.9em;
         }
+        /* Star Rating Styles */
+        .rating-input {
+            display: flex;
+            flex-direction: row-reverse;
+            justify-content: flex-end;
+        }
+        .rating-input input {
+            display: none;
+        }
+        .rating-input label {
+            cursor: pointer;
+            font-size: 1.8em;
+            padding: 0 0.2em;
+            color: #ccc;
+        }
+        .rating-input label:hover,
+        .rating-input label:hover ~ label,
+        .rating-input input:checked ~ label {
+            color: #ffb700;
+        }
+        .rating-input label i {
+            transition: color 0.3s;
+        }
+        .avatar-circle {
+            width: 48px;
+            height: 48px;
+            background-color: #3f51b5;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2em;
+        }
     </style>
 </head>
 <body>
@@ -196,7 +230,7 @@
             </div>
             {% elif user.is_staff and order.status == 'processing' %}
             <div class="mt-3">
-                <a href="{% url 'assign_delivery' order.id %}" class="btn btn-primary">
+                <a href="{% url 'select_delivery_partner' order.id %}" class="btn btn-primary">
                     <i class="fas fa-truck me-2"></i>Assign Delivery Partner
                 </a>
             </div>
@@ -302,7 +336,7 @@
 
     <div class="order-actions mt-4">
         {% if order.status == 'processing' and user.is_staff %}
-        <a href="{% url 'assign_delivery' order.id %}" class="btn btn-primary">
+        <a href="{% url 'select_delivery_partner' order.id %}" class="btn btn-primary">
             <i class="fas fa-truck me-2"></i>Assign Delivery Partner
         </a>
         {% endif %}
@@ -334,6 +368,213 @@
             </a>
         </div>
     {% endif %}
+
+    <!-- Delivery Rating Section -->
+    {% if order.status == 'DELIVERED' and not delivery_rating %}
+    <div class="mt-8 p-4 bg-gray-50 rounded-lg">
+        <h3 class="text-xl font-semibold mb-4">Rate Delivery Service</h3>
+        <form id="deliveryRatingForm" class="space-y-4">
+            {% csrf_token %}
+            <div class="flex items-center space-x-4">
+                <span class="text-gray-700">Rating:</span>
+                <div class="flex space-x-2">
+                    {% for i in "12345" %}
+                    <button type="button" 
+                            class="rating-star text-2xl text-gray-400 hover:text-yellow-400"
+                            data-rating="{{ i }}">★</button>
+                    {% endfor %}
+                </div>
+            </div>
+            <div>
+                <label class="block text-gray-700 mb-2">Comment (optional):</label>
+                <textarea name="comment" rows="3" 
+                        class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+            </div>
+            <button type="submit" 
+                    class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                Submit Rating
+            </button>
+        </form>
+    </div>
+    {% elif delivery_rating %}
+    <div class="mt-8 p-4 bg-gray-50 rounded-lg">
+        <h3 class="text-xl font-semibold mb-4">Your Delivery Rating</h3>
+        <div class="flex items-center space-x-2">
+            <div class="text-yellow-400">
+                {% for i in "12345" %}
+                <span class="{% if i|add:'0' <= delivery_rating.rating %}text-yellow-400{% else %}text-gray-300{% endif %}">★</span>
+                {% endfor %}
+            </div>
+            <span class="text-gray-600">({{ delivery_rating.rating }} out of 5)</span>
+        </div>
+        {% if delivery_rating.comment %}
+        <p class="mt-2 text-gray-700">{{ delivery_rating.comment }}</p>
+        {% endif %}
+        <p class="text-sm text-gray-500 mt-2">Rated on {{ delivery_rating.created_at|date:"F d, Y" }}</p>
+    </div>
+    {% endif %}
+
+    {% if order.status == 'DELIVERED' and not delivery_rating %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('deliveryRatingForm');
+        const stars = document.querySelectorAll('.rating-star');
+        let selectedRating = 0;
+
+        // Handle star selection
+        stars.forEach(star => {
+            star.addEventListener('click', function() {
+                selectedRating = this.dataset.rating;
+                stars.forEach(s => {
+                    if (s.dataset.rating <= selectedRating) {
+                        s.classList.add('text-yellow-400');
+                        s.classList.remove('text-gray-400');
+                    } else {
+                        s.classList.remove('text-yellow-400');
+                        s.classList.add('text-gray-400');
+                    }
+                });
+            });
+        });
+
+        // Handle form submission
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (!selectedRating) {
+                alert('Please select a rating');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/rate-delivery/{{ order.delivery.id }}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'rating': selectedRating,
+                        'comment': form.querySelector('textarea[name="comment"]').value
+                    })
+                });
+
+                const data = await response.json();
+                if (data.status === 'success') {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Error submitting rating');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error submitting rating');
+            }
+        });
+    });
+    </script>
+    {% endif %}
+
+    <!-- Delivery Partner Review Section (only for delivered orders) -->
+    {% if order.status == 'delivered' and order.delivery %}
+    <div class="card mt-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-star me-2"></i>Rate Delivery Partner</h5>
+        </div>
+        <div class="card-body">
+            {% if delivery_rating %}
+                <div class="alert alert-success">
+                    <h6 class="mb-2">Your Rating: 
+                        {% for i in "12345"|make_list %}
+                            {% if forloop.counter <= delivery_rating.rating %}
+                                <i class="fas fa-star text-warning"></i>
+                            {% else %}
+                                <i class="far fa-star text-muted"></i>
+                            {% endif %}
+                        {% endfor %}
+                    </h6>
+                    <p>{{ delivery_rating.comment }}</p>
+                    <small class="text-muted">Submitted on {{ delivery_rating.created_at|date:"F j, Y" }}</small>
+                </div>
+            {% else %}
+                <form method="post" action="{% url 'rate_delivery' delivery_id=order.delivery.id %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">How would you rate your delivery experience?</label>
+                        <div class="rating-input mb-3">
+                            <input type="radio" id="star5" name="rating" value="5" required>
+                            <label for="star5" title="5 stars"><i class="far fa-star"></i></label>
+                            
+                            <input type="radio" id="star4" name="rating" value="4">
+                            <label for="star4" title="4 stars"><i class="far fa-star"></i></label>
+                            
+                            <input type="radio" id="star3" name="rating" value="3">
+                            <label for="star3" title="3 stars"><i class="far fa-star"></i></label>
+                            
+                            <input type="radio" id="star2" name="rating" value="2">
+                            <label for="star2" title="2 stars"><i class="far fa-star"></i></label>
+                            
+                            <input type="radio" id="star1" name="rating" value="1">
+                            <label for="star1" title="1 star"><i class="far fa-star"></i></label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="comment" class="form-label">Comments</label>
+                        <textarea class="form-control" id="comment" name="comment" rows="3" placeholder="Share your experience with the delivery partner"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit Review</button>
+                </form>
+            {% endif %}
+            
+            <div class="delivery-partner-info mt-4">
+                <h6>Delivery Partner:</h6>
+                <div class="d-flex align-items-center">
+                    <div class="avatar-circle me-3">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div>
+                        <p class="mb-1 fw-bold">{{ order.delivery.delivery_partner.user.get_full_name }}</p>
+                        <p class="mb-0 text-muted">{{ order.delivery.delivery_partner.phone_number }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Interactive star rating
+        const stars = document.querySelectorAll('.rating-input label i');
+        stars.forEach(star => {
+            star.addEventListener('mouseover', function() {
+                this.classList.remove('far');
+                this.classList.add('fas');
+            });
+            star.addEventListener('mouseout', function() {
+                const input = document.querySelector(`#${this.parentElement.getAttribute('for')}`);
+                if (!input.checked) {
+                    this.classList.remove('fas');
+                    this.classList.add('far');
+                }
+            });
+            star.parentElement.addEventListener('click', function() {
+                const input = document.querySelector(`#${this.getAttribute('for')}`);
+                stars.forEach(s => {
+                    s.classList.remove('fas');
+                    s.classList.add('far');
+                });
+                
+                // Fill in all stars up to the clicked one
+                let currentStar = this.querySelector('i');
+                let prevStar = currentStar;
+                while (prevStar) {
+                    prevStar.classList.remove('far');
+                    prevStar.classList.add('fas');
+                    prevStar = prevStar.parentElement.nextElementSibling?.querySelector('i');
+                }
+            });
+        });
+    });
+    </script>
 
 </body>
 </html>

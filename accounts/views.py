@@ -1,3 +1,31 @@
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.http import JsonResponse, HttpResponse, FileResponse
+from django.views.decorators.http import require_POST, require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
+from django.utils import timezone
+from django.db import transaction, models
+from django.conf import settings
+from decimal import Decimal
+from PIL import Image
+import torch
+import logging
+import json
+import io
+import csv
+from django.urls import reverse
+from datetime import datetime
+
+from .models import (
+    User, Product, Order, Delivery, DeliveryPartner,
+    DeliveryStatusHistory, DeliveryRoute, Notification,
+    DeliveryEarning, Cart, CartItem, Wishlist
+)
+from .utils import is_delivery_partner, get_image_classifier, process_delivery_earnings
+
+logger = logging.getLogger(__name__)
+
 import json
 import stripe
 from django.conf import settings
@@ -13,7 +41,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.dispatch import receiver
 from django.db.models.signals import post_save
-from django.db.models import Q, Sum, Avg, Count, F, FloatField, ExpressionWrapper, Case, When, DurationField, DecimalField
+from django.db.models import Q, Sum, Avg, Count, F, FloatField, ExpressionWrapper, Case, When, DurationField, DecimalField, Value, Max, IntegerField
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
@@ -38,6 +66,14 @@ from functools import lru_cache
 from django.core.cache import cache
 from django.db import transaction
 from datetime import datetime, timedelta
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from django.shortcuts import get_object_or_404, redirect
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from .models import Delivery, DeliveryRoute, DeliveryStatusHistory
+from .utils import is_delivery_partner
 
 from .forms import (
     ArtisanProfileForm, ProductForm, ProfileForm, UserRegistrationForm,
@@ -55,19 +91,206 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # Helper Functions
 def is_delivery_partner(user):
-    return user.is_authenticated and user.user_type == 'delivery_partner'
+    """Check if user is a delivery partner"""
+    return hasattr(user, 'delivery_partner') and user.delivery_partner is not None
 
 def get_active_delivery(delivery_partner):
+    """Get the active deliveries for a delivery partner"""
     return Delivery.objects.filter(
         delivery_partner=delivery_partner,
-        status__in=['pending', 'in_transit']
-    ).first()
+        status__in=['pending', 'picked_up', 'in_transit', 'out_for_delivery']
+    ).order_by('expected_delivery_time')  # Order by expected delivery time to prioritize urgent deliveries
 
 @lru_cache(maxsize=1)
 def get_image_classifier():
+    """
+    Load and cache the image classification model.
+    Uses LRU cache to avoid loading the model multiple times.
+    """
+    # Try to get the model from the Django cache first
+    cached_model = cache.get('vit_image_model')
+    cached_processor = cache.get('vit_image_processor')
+    
+    if cached_model is not None and cached_processor is not None:
+        print("Using cached model from Django cache")
+        return cached_processor, cached_model
+    
+    print("Loading model from transformers library")
+    # If not in cache, load the model
     processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224')
     model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
+    
+    # Store in Django cache for 1 hour (3600 seconds)
+    cache.set('vit_image_processor', processor, 3600)
+    cache.set('vit_image_model', model, 3600)
+    
     return processor, model
+
+@login_required
+def classify_image(request):
+    """
+    View function for classifying uploaded images using the pre-trained model.
+    Uses the get_image_classifier helper function to load the model.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST requests are supported'}, status=405)
+    
+    if 'image' not in request.FILES:
+        return JsonResponse({'error': 'No image file provided'}, status=400)
+    
+    try:
+        start_time = timezone.now()
+        image_file = request.FILES['image']
+        
+        # Open and resize image for faster processing
+        image = Image.open(image_file).convert('RGB')
+        max_size = (224, 224)  # Standard size for ViT models
+        image.thumbnail(max_size, Image.LANCZOS)
+        
+        # Get the classifier model
+        processor, model = get_image_classifier()
+        
+        # Process the image
+        inputs = processor(images=image, return_tensors="pt")
+        outputs = model(**inputs)
+        logits = outputs.logits
+        
+        # Get top-5 predictions for better context
+        probs = torch.nn.functional.softmax(logits, dim=-1)[0]
+        top5_probs, top5_indices = torch.topk(probs, 5)
+        
+        # Convert top predictions to list
+        top_predictions = []
+        for i, (prob, idx) in enumerate(zip(top5_probs.tolist(), top5_indices.tolist())):
+            top_predictions.append({
+                'class': model.config.id2label[idx],
+                'confidence': round(prob * 100, 2)
+            })
+        
+        # Get top prediction
+        predicted_class_idx = logits.argmax(-1).item()
+        predicted_class = model.config.id2label[predicted_class_idx]
+        confidence = probs[predicted_class_idx].item()
+        
+        # Map ViT class to one of the product categories (you can expand this mapping)
+        # First, let's get actual categories from the database
+        actual_categories = list(Category.objects.filter(is_active=True).values_list('name', flat=True))
+        logger.info(f"Available categories in database: {actual_categories}")
+        logger.info(f"Predicted class: {predicted_class}")
+        
+        # Default mapping (fallback)
+        category_mapping = {
+            # Map to exact category names in your database
+            'pitcher': 'Pottery',
+            'vase': 'Pottery',
+            'ceramic': 'Pottery',
+            'pottery': 'Pottery',
+            'bowl': 'Pottery',
+            'cup': 'Pottery',
+            'mug': 'Pottery',
+            'plate': 'Pottery',
+            'pot': 'Pottery',
+            
+            'necklace': 'Jewelry',
+            'bracelet': 'Jewelry',
+            'ring': 'Jewelry',
+            'earring': 'Jewelry',
+            'pendant': 'Jewelry',
+            'metal': 'Jewelry',
+            'gold': 'Jewelry',
+            'silver': 'Jewelry',
+            'gemstone': 'Jewelry',
+            'bead': 'Jewelry',
+            
+            'woodwork': 'Woodworking',
+            'carving': 'Woodworking',
+            'wooden': 'Woodworking',
+            'wood': 'Woodworking',
+            'furniture': 'Woodworking',
+            'table': 'Woodworking',
+            'chair': 'Woodworking',
+            
+            'painting': 'Painting',
+            'canvas': 'Painting',
+            'artwork': 'Painting',
+            'portrait': 'Painting',
+            'landscape': 'Painting',
+            'art': 'Painting',
+        }
+        
+        # Find appropriate category
+        classification = None
+        
+        # First try direct matches with predicted class
+        for pred_word in predicted_class.lower().split():
+            for category_name in actual_categories:
+                if pred_word in category_name.lower() or category_name.lower() in pred_word:
+                    classification = category_name
+                    logger.info(f"Direct match found: {classification}")
+                    break
+        
+        # If no direct match, try mapping
+        if not classification:
+            for key_term, category_value in category_mapping.items():
+                if key_term.lower() in predicted_class.lower():
+                    # Find the best matching actual category
+                    for actual_cat in actual_categories:
+                        if category_value.lower() in actual_cat.lower() or actual_cat.lower() in category_value.lower():
+                            classification = actual_cat
+                            logger.info(f"Mapped match found: {classification} via {key_term} -> {category_value}")
+                            break
+                    if classification:
+                        break
+        
+        # For top predictions, also look at other high confidence classes if we still don't have a match
+        if not classification:
+            for pred in top_predictions[:3]:
+                pred_class = pred['class'].lower()
+                
+                # Try direct matches with pred_class
+                for pred_word in pred_class.split():
+                    for category_name in actual_categories:
+                        if pred_word in category_name.lower() or category_name.lower() in pred_word:
+                            classification = category_name
+                            logger.info(f"Top prediction direct match found: {classification}")
+                            break
+                    if classification:
+                        break
+                
+                # If still no match, try with mapping
+                if not classification:
+                    for key_term, category_value in category_mapping.items():
+                        if key_term.lower() in pred_class:
+                            # Find the best matching actual category
+                            for actual_cat in actual_categories:
+                                if category_value.lower() in actual_cat.lower() or actual_cat.lower() in category_value.lower():
+                                    classification = actual_cat
+                                    logger.info(f"Top prediction mapped match found: {classification} via {key_term} -> {category_value}")
+                                    break
+                            if classification:
+                                break
+                
+                if classification:
+                    break
+        
+        # Fallback if we still couldn't find a match
+        if not classification and actual_categories:
+            classification = 'Other' if 'Other' in actual_categories else actual_categories[0]
+            logger.info(f"No match found, using fallback: {classification}")
+        
+        end_time = timezone.now()
+        processing_time = (end_time - start_time).total_seconds()
+        
+        return JsonResponse({
+            'success': True,
+            'classification': classification or 'Other',
+            'confidence': round(confidence * 100, 2),
+            'top_predictions': top_predictions,
+            'processing_time_seconds': processing_time
+        })
+    except Exception as e:
+        logger.error(f"Error in image classification: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 # Home and Authentication Views
 def home(request):
@@ -122,14 +345,12 @@ def login_view(request):
                 return redirect('delivery_dashboard')  # Redirect to delivery dashboard
             else:
                 return redirect('home')
-        else:
             messages.error(request, 'Invalid username or password.')
     
     return render(request, 'login.html', {
         'next': request.GET.get('next', '')
     })
 
-@login_required
 def signout(request):
     if request.method in ['GET', 'POST']:
         logout(request)
@@ -142,21 +363,40 @@ def signout(request):
 @user_passes_test(lambda u: u.is_staff)
 def admin_dashboard(request):
     # Get notification data
-    unread_notifications_count = request.user.notifications.filter(is_read=False).count()
-    recent_notifications = request.user.notifications.all()[:5]  # Get 5 most recent notifications
+    new_orders_count = Order.objects.filter(status='pending').count()
+    new_artisans_count = User.objects.filter(user_type='artisan', is_active=False).count()
+    pending_delivery_partners_count = DeliveryPartner.objects.filter(status='pending').count()
+    
+    # Get recent orders
+    recent_orders = Order.objects.order_by('-created_at')[:5]
+    
+    # Get top selling products
+    top_products = Product.objects.annotate(
+        total_ordered=Sum('orderitem__quantity')
+    ).order_by('-total_ordered')[:5]
+    
+    # Get total revenue
+    total_revenue = Order.objects.filter(status='delivered').aggregate(
+        total=Sum('total_price')
+    )['total'] or 0
+    
+    # Get unassigned orders
+    unassigned_orders = Order.objects.filter(
+        status='processing'
+    ).exclude(
+        id__in=Delivery.objects.values_list('order_id', flat=True)
+    ).count()
 
     context = {
-        'total_users': User.objects.count(),
-        'total_artisans': User.objects.filter(user_type='artisan').count(),
-        'total_products': Product.objects.count(),
-        'total_delivery_partners': DeliveryPartner.objects.count(),
-        'pending_partners': DeliveryPartner.objects.filter(status='pending').count(),
-        'unassigned_orders': Order.objects.filter(status='confirmed', delivery__isnull=True).count(),
-        'recent_products': Product.objects.all().order_by('-created_at')[:5],
-        # Add notification data to context
-        'unread_notifications_count': unread_notifications_count,
-        'recent_notifications': recent_notifications,
+        'new_orders_count': new_orders_count,
+        'new_artisans_count': new_artisans_count,
+        'pending_delivery_partners_count': pending_delivery_partners_count,
+        'recent_orders': recent_orders,
+        'top_products': top_products,
+        'total_revenue': total_revenue,
+        'unassigned_orders': unassigned_orders,
     }
+    
     return render(request, 'admin_dashboard.html', context)
 
 @login_required
@@ -315,7 +555,7 @@ def admin_add_category(request):
                 else:
                     Category.objects.create(name=category_name, parent=parent)
                     messages.success(request, f"{'Subcategory' if is_subcategory else 'Category'} '{category_name}' has been added successfully.")
-            return redirect('admin_add_category')
+                return redirect('admin_add_category')
         else:
             messages.error(request, "Category name cannot be empty.")
     
@@ -339,8 +579,11 @@ def admin_edit_category(request, category_id):
                 parent = Category.objects.get(id=parent_id)
                 if parent != category:
                     category.parent = parent
+                else:
+                    category.parent = None
             else:
                 category.parent = None
+            
             category.save()
             messages.success(request, f"Category '{category.name}' has been updated successfully.")
             return redirect('admin_add_category')
@@ -419,7 +662,7 @@ def artisan_profile(request):
             artisan.save()
             messages.success(request, 'Profile picture updated successfully.')
             return redirect('artisan_profile')
-        else:
+        elif request.POST:  # Changed else to elif
             form = ArtisanProfileForm(request.POST, instance=artisan)
             if form.is_valid():
                 form.save()
@@ -750,374 +993,131 @@ def deactivate_account(request):
     return JsonResponse({'success': True})
 
 # Checkout and Payment Views
-@require_http_methods(["POST", "GET"])  # Allow both POST and GET
+@require_http_methods(["GET", "POST"])
 @login_required
 def checkout(request):
-    if request.method == 'POST':
-        try:
-            cart_data = json.loads(request.body)
-            line_items = []
-
-            for item in cart_data:
-                product = Product.objects.get(id=item['id'])
-                line_items.append({
-                    'price_data': {
-                        'currency': 'inr',
-                        'unit_amount': int(product.price * 100),
-                        'product_data': {
-                            'name': product.name,
-                            'description': product.description[:100],
-                        },
-                    },
-                    'quantity': item['quantity'],
-                })
-
-            checkout_session = stripe.checkout.Session.create(
-                payment_method_types=['card'],
-                line_items=line_items,
-                mode='payment',
-                success_url=request.build_absolute_uri(reverse('payment_success')),
-                cancel_url=request.build_absolute_uri(reverse('payment_cancel')),
-            )
-            return JsonResponse({'success': True, 'checkout_url': checkout_session.url})
-        except Product.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'One or more products in your cart are no longer available.'}, status=400)
-        except stripe.error.StripeError as e:
-            return JsonResponse({'success': False, 'error': str(e)}, status=400)
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': 'An unexpected error occurred. Please try again.'}, status=500)
-    else:
-        # Handle GET request, e.g., render a checkout page
+    """Unified checkout view."""
+    try:
+        # Get user's cart and related items
+        cart = Cart.objects.get(user=request.user)
+        cart_items = CartItem.objects.filter(cart=cart).select_related('product')
+        
+        if not cart_items.exists():
+            messages.warning(request, 'Your cart is empty.')
+            return redirect('cart')
+        
+        # Calculate total amount
+        total_amount = Decimal('0.00')
+        for item in cart_items:
+            total_amount += item.product.price * item.quantity
+        
+        if request.method == 'POST':
+            try:
+                # Process checkout form
+                address = request.POST.get('address')
+                city = request.POST.get('city')
+                state = request.POST.get('state')
+                zipcode = request.POST.get('zipcode')
+                
+                if not all([address, city, state, zipcode]):
+                    messages.error(request, 'Please fill in all address fields.')
+                    return redirect('checkout')
+                
+                try:
+                    with transaction.atomic():
+                        # Create order
+                        order = Order.objects.create(
+                            user=request.user,
+                            total_amount=total_amount,
+                            shipping_address=f"{address}, {city}, {state} {zipcode}",
+                            status='pending'
+                        )
+                        
+                        # Create order items from cart
+                        order_items = []
+                        for cart_item in cart_items:
+                            order_items.append(OrderItem(
+                                order=order,
+                                product=cart_item.product,
+                                quantity=cart_item.quantity,
+                                price=cart_item.product.price
+                            ))
+                        
+                        # Bulk create order items
+                        OrderItem.objects.bulk_create(order_items)
+                        
+                        # Clear the cart after successful order creation
+                        cart_items.delete()
+                        
+                        # Redirect to payment
+                        return redirect('create_checkout_session')
+                        
+                except Exception as e:
+                    messages.error(request, f'An error occurred during checkout: {str(e)}')
+                    return redirect('checkout')
+            except Exception as e:
+                messages.error(request, f'An error processing form data: {str(e)}')
+                return redirect('checkout')
+        
+        # Handle GET request
         context = {
-            'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY  # Ensure this is set
+            'cart_items': cart_items,
+            'total_amount': total_amount,
+            'page_title': 'Checkout'
         }
         return render(request, 'checkout.html', context)
-
-
-@require_GET
-def payment_success(request):
-    return render(request, 'payment_success.html')
-
-@require_GET
-def payment_cancel(request):
-    return render(request, 'payment_cancel.html')
-
-# New views for cart and wishlist
-@login_required
-def cart(request):
-    if request.user.is_authenticated:
-        cart, created = Cart.objects.get_or_create(user=request.user)
-        cart_items = cart.items.all()
-    else:
-        session_cart = request.session.get('cart', {})
-        cart_items = []
-        for product_id, quantity in session_cart.items():
-            product = get_object_or_404(Product, id=product_id)
-            cart_items.append({
-                'product': product,
-                'quantity': quantity,
-                'item_total': product.price * quantity
-            })
-
-    total = sum(item.product.price * item.quantity for item in cart_items)
-    
-    context = {
-        'cart_items': cart_items,
-        'total': total,
-        'stripe_publishable_key': settings.STRIPE_PUBLISHABLE_KEY
-    }
-    return render(request, 'cart.html', context)
-
-@login_required
-def wishlist(request):
-    wishlist = request.session.get('wishlist', [])
-    wishlist_items = Product.objects.filter(id__in=wishlist)
-
-    gst_rate = Decimal(str(settings.GST_RATE))
-    
-    for item in wishlist_items:
-        item.gst_amount = item.price * gst_rate
-        item.total_price = item.price + item.gst_amount
-
-    context = {
-        'wishlist_items': wishlist_items,
-        'GST_RATE': gst_rate * 100,
-    }
-    return render(request, 'wishlist.html', context)
-
-@login_required
-@require_POST
-def single_product_checkout(request, product_id):
-    product = get_object_or_404(Product, id=product_id)
-    quantity = int(request.POST.get('quantity', 1))  # Get quantity from POST data
-
-    gst_rate = Decimal(str(settings.GST_RATE))
-    base_price = product.price
-    gst_amount = base_price * gst_rate
-    total_price = base_price + gst_amount
-
-    line_items = [{
-        'price_data': {
-            'currency': 'inr',
-            'unit_amount': int(total_price * 100),  # Stripe expects amount in cents
-            'product_data': {
-                'name': product.name,
-                'description': f'Base Price: ₹{base_price}, GST: ₹{gst_amount}',
-            },
-        },
-        'quantity': quantity,
-    }]
-
-    try:
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=line_items,
-            mode='payment',
-            success_url=request.build_absolute_uri(reverse('payment_success')) + '?session_id={CHECKOUT_SESSION_ID}',
-            cancel_url=request.build_absolute_uri(reverse('payment_cancel')),
-        )
-        return JsonResponse({'success': True, 'checkout_url': checkout_session.url})
+    except Cart.DoesNotExist:
+        messages.error(request, 'Cart not found.')
+        return redirect('cart')
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        messages.error(request, f'An error occurred: {str(e)}')
+        return redirect('cart')
 
 @login_required
-@require_POST
-def add_to_cart(request):
+def create_checkout_session(request):
+    """Create a checkout session for payment processing."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
     try:
-        product_id = request.POST.get('product_id')
-        quantity = int(request.POST.get('quantity', 1))
-        
-        if not product_id:
-            return JsonResponse({'success': False, 'error': 'Product ID is required'})
-        
-        product = get_object_or_404(Product, id=product_id)
-        
-        if product.inventory < quantity:
-            return JsonResponse({'success': False, 'error': 'Not enough inventory'})
-        
-        if request.user.is_authenticated:
-            cart, created = Cart.objects.get_or_create(user=request.user)
-            cart_item, item_created = CartItem.objects.get_or_create(cart=cart, product=product)
-            
-            if item_created:
-                cart_item.quantity = quantity
-            else:
-                cart_item.quantity += quantity
-            
-            cart_item.save()
-        else:
-            cart = request.session.get('cart', {})
-            cart[product_id] = cart.get(product_id, 0) + quantity
-            request.session['cart'] = cart
-        
-        # Update the product inventory
-        product.inventory -= quantity
-        product.save()
-        
+        # Get cart items
+        cart_items = CartItem.objects.filter(user=request.user)
+        if not cart_items.exists():
+            return JsonResponse({'error': 'Cart is empty'}, status=400)
+
+        # Calculate total price
+        total_price = sum(item.quantity * item.product.price for item in cart_items)
+
+        # Create order
+        order = Order.objects.create(
+            user=request.user,
+            total_price=total_price,
+            status='pending'
+        )
+
+        # Create order items
+        for item in cart_items:
+            OrderItem.objects.create(
+                order=order,
+                product=item.product,
+                quantity=item.quantity,
+                price=item.product.price
+            )
+
+        # Redirect to payment success page
         return JsonResponse({
             'success': True,
-            'new_inventory': product.inventory
+            'redirect_url': reverse('payment_success')
         })
+
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'error': str(e)}, status=400)
 
-@require_POST
-def remove_from_cart(request):
-    product_id = request.POST.get('product_id')
-    
-    if request.user.is_authenticated:
-        cart = Cart.objects.get(user=request.user)
-        try:
-            cart_item = CartItem.objects.get(cart=cart, product_id=product_id)
-            product = cart_item.product
-            product.inventory += cart_item.quantity
-            product.save()
-            cart_item.delete()
-        except CartItem.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Product not in cart'})
-    else:
-        cart = request.session.get('cart', {})
-        if str(product_id) in cart:
-            product = get_object_or_404(Product, id=product_id)
-            product.inventory += cart[str(product_id)]
-            product.save()
-            del cart[str(product_id)]
-            request.session['cart'] = cart
-    
-    return JsonResponse({'success': True, 'new_inventory': product.inventory})
-
-@require_POST
-def update_cart_quantity(request):
-    product_id = request.POST.get('product_id')
-    new_quantity = int(request.POST.get('quantity', 1))
-    
-    product = get_object_or_404(Product, id=product_id)
-    
-    if request.user.is_authenticated:
-        cart, created = Cart.objects.get_or_create(user=request.user)
-        try:
-            cart_item = CartItem.objects.get(cart=cart, product=product)
-            quantity_difference = new_quantity - cart_item.quantity
-            
-            if product.inventory < quantity_difference:
-                return JsonResponse({'success': False, 'error': 'Not enough inventory'})
-            
-            if new_quantity > 0:
-                cart_item.quantity = new_quantity
-                cart_item.save()
-            else:
-                cart_item.delete()
-            
-            product.inventory -= quantity_difference
-            product.save()
-        except CartItem.DoesNotExist:
-            if new_quantity > 0:
-                if product.inventory < new_quantity:
-                    return JsonResponse({'success': False, 'error': 'Not enough inventory'})
-                CartItem.objects.create(cart=cart, product=product, quantity=new_quantity)
-                product.inventory -= new_quantity
-                product.save()
-            else:
-                return JsonResponse({'success': False, 'error': 'Product not in cart'})
-    else:
-        cart = request.session.get('cart', {})
-        if str(product_id) in cart:
-            quantity_difference = new_quantity - cart[str(product_id)]
-            if product.inventory < quantity_difference:
-                return JsonResponse({'success': False, 'error': 'Not enough inventory'})
-            
-            if new_quantity > 0:
-                cart[str(product_id)] = new_quantity
-            else:
-                del cart[str(product_id)]
-            
-            request.session['cart'] = cart
-            product.inventory -= quantity_difference
-            product.save()
-        else:
-            if new_quantity > 0:
-                if product.inventory < new_quantity:
-                    return JsonResponse({'success': False, 'error': 'Not enough inventory'})
-                cart[str(product_id)] = new_quantity
-                request.session['cart'] = cart
-                product.inventory -= new_quantity
-                product.save()
-            else:
-                return JsonResponse({'success': False, 'error': 'Product not in cart'})
-    
-    return JsonResponse({'success': True, 'new_inventory': product.inventory})
-
-
-@login_required
-def get_cart(request):
-    cart = Cart.objects.get(user=request.user)
-    cart_items = cart.items.all()
-    total_items = sum(item.quantity for item in cart_items)
-    
-    gst_rate = Decimal(str(settings.GST_RATE))
-    
-    cart_data = []
-    total = Decimal('0.00')
-    total_gst = Decimal('0.00')
-    
-    for item in cart_items:
-        base_price = item.product.price * item.quantity
-        gst_amount = base_price * gst_rate
-        item_total = base_price + gst_amount
-        
-        total += item_total
-        total_gst += gst_amount
-        
-        cart_data.append({
-            'id': item.product.id,
-            'name': item.product.name,
-            'quantity': item.quantity,
-            'base_price': float(base_price),
-            'gst_amount': float(gst_amount),
-            'total_price': float(item_total),
-            'image_url': item.product.images.first().image.url if item.product.images.exists() else '',
-        })
-    
-    return JsonResponse({
-        'cart_items': cart_data,
-        'total_items': total_items,
-        'subtotal': float(total - total_gst),
-        'total_gst': float(total_gst),
-        'total': float(total),
-    })
-
-
-@login_required
-@require_POST
-def add_to_wishlist(request):
-    product_id = request.POST.get('product_id')
-    
-    wishlist = request.session.get('wishlist', [])
-    
-    if product_id not in wishlist:
-        wishlist.append(product_id)
-        request.session['wishlist'] = wishlist
-        request.session.modified = True
-        return JsonResponse({'success': True})
-    else:
-        return JsonResponse({'success': False, 'error': 'Product already in wishlist'})
-
-@login_required
-@require_POST
-def remove_from_wishlist(request):
-    product_id = request.POST.get('product_id')
-    
-    wishlist = request.session.get('wishlist', [])
-    
-    if product_id in wishlist:
-        wishlist.remove(product_id)
-        request.session['wishlist'] = wishlist
-        request.session.modified = True
-        return JsonResponse({'success': True})
-    else:
-        return JsonResponse({'success': False, 'error': 'Product not in wishlist'})
-
-@login_required
-@require_POST
-def create_checkout_session(request):
-    try:
-        cart, created = Cart.objects.get_or_create(user=request.user)
-        cart_items = CartItem.objects.filter(cart=cart)
-        
-        if not cart_items:
-            return JsonResponse({'success': False, 'error': 'Cart is empty'})
-
-        line_items = []
-        for cart_item in cart_items:
-            line_items.append({
-                'price_data': {
-                    'currency': 'usd',
-                    'unit_amount': int(cart_item.product.price * 100),
-                    'product_data': {
-                        'name': cart_item.product.name,
-                    },
-                },
-                'quantity': cart_item.quantity,
-            })
-
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=line_items,
-            mode='payment',
-            success_url=request.build_absolute_uri(reverse('payment_success')),
-            cancel_url=request.build_absolute_uri(reverse('payment_cancel')),
-        )
-        return JsonResponse({'success': True, 'session_id': checkout_session.id})
-    except stripe.error.StripeError as e:
-        return JsonResponse({'success': False, 'error': str(e)})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': 'An unexpected error occurred'})
-
-@login_required
+@require_GET
 def payment_success(request):
     try:
         cart, created = Cart.objects.get_or_create(user=request.user)
-        cart_items = CartItem.objects.filter(cart=cart)
+        cart_items = cart.items.all()
         
         if not cart_items:
             messages.warning(request, "Your cart is empty.")
@@ -1129,7 +1129,7 @@ def payment_success(request):
         order = Order.objects.create(
             user=request.user,
             total_price=total_price,
-            status='processing'
+            status='processing'  # Changed from 'confirmed' to 'processing'
         )
 
         # Create order items and update inventory
@@ -1154,107 +1154,26 @@ def payment_success(request):
         Notification.objects.create(
             user=request.user,
             title='Order Placed Successfully',
-            message=f'Your order #{order.id} has been placed successfully. Please select a delivery partner.',
+            message=f'Your order #{order.id} has been placed successfully.',
             notification_type='order_update'
         )
-
-        # Redirect to delivery partner selection
-        return redirect('select_delivery_partner', order_id=order.id)
+        
+        # Create notification for admin
+        admin_users = User.objects.filter(is_staff=True)
+        for admin in admin_users:
+            Notification.objects.create(
+                user=admin,
+                title='New Order Received',
+                message=f'New order #{order.id} requires delivery assignment.',
+                notification_type='order_update'
+            )
+        
+        messages.success(request, 'Order placed successfully! You will be notified once your order is assigned to a delivery partner.')
+        return redirect('order_detail', order_id=order.id)
         
     except Exception as e:
         messages.error(request, f"An error occurred while processing your order: {str(e)}")
         return redirect('cart')
-
-@login_required
-def select_delivery_partner(request, order_id):
-    order = get_object_or_404(Order, id=order_id, user=request.user)
-    
-    # Check if delivery already exists for this order
-    if Delivery.objects.filter(order=order).exists():
-        messages.warning(request, "A delivery partner has already been assigned to this order.")
-        return redirect('order_detail', order_id=order.id)
-    
-    # Get available delivery partners
-    available_partners = DeliveryPartner.objects.filter(
-        status='approved',
-        is_available=True
-    ).annotate(
-        total_deliveries=Count('deliveries'),
-        average_rating=Avg('delivery_ratings__rating')
-    ).exclude(
-        deliveries__status__in=['pending', 'in_transit'],
-        deliveries__order__status__in=['processing', 'confirmed']
-    )
-    
-    context = {
-        'order': order,
-        'available_partners': available_partners
-    }
-    return render(request, 'select_delivery_partner.html', context)
-
-@login_required
-def assign_delivery_partner(request, order_id, partner_id):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Method not allowed'}, status=405)
-    
-    order = get_object_or_404(Order, id=order_id, user=request.user)
-    partner = get_object_or_404(DeliveryPartner, id=partner_id, status='approved', is_available=True)
-    
-    # Check if delivery already exists
-    if Delivery.objects.filter(order=order).exists():
-        messages.error(request, "This order already has a delivery partner assigned.")
-        return redirect('order_detail', order_id=order.id)
-    
-    try:
-        with transaction.atomic():
-            # Get user's profile for address
-            user_profile = request.user.profile
-            
-            # Create delivery record with address
-            delivery = Delivery.objects.create(
-                order=order,
-                delivery_partner=partner,
-                status='pending',
-                delivery_address=f"{user_profile.street_address}, {user_profile.city}, {user_profile.state}, {user_profile.postal_code}",
-                expected_delivery_time=timezone.now() + timedelta(days=3)
-            )
-            
-            # Create initial status history
-            DeliveryStatusHistory.objects.create(
-                delivery=delivery,
-                status='pending',
-                notes='Delivery assigned by customer'
-            )
-            
-            # Update order status
-            order.status = 'confirmed'
-            order.save()
-            
-            # Update delivery partner availability
-            partner.is_available = False
-            partner.save()
-            
-            # Create notifications
-            Notification.objects.create(
-                user=partner.user,
-                title='New Delivery Assignment',
-                message=f'You have been assigned to deliver order #{order.id}',
-                notification_type='delivery_assignment'
-            )
-            
-            Notification.objects.create(
-                user=order.user,
-                title='Delivery Partner Assigned',
-                message=f'Your order #{order.id} has been assigned to {partner.user.get_full_name()}',
-                notification_type='order_update'
-            )
-            
-            messages.success(request, 'Delivery partner assigned successfully!')
-            return redirect('order_detail', order_id=order.id)
-            
-    except Exception as e:
-        messages.error(request, f'Error assigning delivery partner: {str(e)}')
-        return redirect('select_delivery_partner', order_id=order.id)
 
 @login_required
 def payment_cancel(request):
@@ -1264,57 +1183,130 @@ def payment_cancel(request):
 
 @login_required
 def order_history(request):
-    orders = Order.objects.filter(user=request.user).order_by('-created_at')
-    processing_orders = orders.filter(status='processing')
-    shipped_orders = orders.filter(status='shipped')
-    delivered_orders = orders.filter(status='delivered')
-
+    # Get all orders for the current user with prefetched data
+    orders = Order.objects.filter(user=request.user)\
+        .prefetch_related(
+            'items__product',
+            'delivery__delivery_partner__user',
+            'delivery__status_history',
+            'delivery__ratings'
+        )
+    
+    # Manual approach - get all orders and filter them in Python
+    all_orders = list(orders)
+    
+    # Create separate lists for active and delivered orders
+    delivered_orders = []
+    active_orders = []
+    
+    # Create a dict to store delivery ratings for each order
+    delivery_ratings = {}
+    
+    for order in all_orders:
+        # Check for delivery partner ratings
+        if hasattr(order, 'delivery') and order.delivery:
+            # Get ratings for this delivery
+            ratings = list(order.delivery.ratings.all())
+            delivery_ratings[order.id] = ratings
+        
+        # Categorize by delivery status
+        if (hasattr(order, 'delivery') and order.delivery and 
+            order.delivery.status.lower() in ['delivered', 'complete', 'completed']):
+            delivered_orders.append(order)
+        elif order.status.lower() == 'delivered':
+            delivered_orders.append(order)
+        else:
+            active_orders.append(order)
+    
+    # Function to get sort key for ordering
+    def sort_key(order):
+        # Check if order has delivery
+        has_delivery = bool(hasattr(order, 'delivery') and order.delivery)
+        assignment_date = getattr(getattr(order, 'delivery', None), 'created_at', None)
+        return (0 if not has_delivery else 1, assignment_date or timezone.now(), order.created_at)
+    
+    # Sort active orders (assigned first, then by date - reversed for newest first)
+    active_orders.sort(key=sort_key, reverse=True)
+    
+    # Debug output
+    logger.info(f"Active orders count: {len(active_orders)}")
+    logger.info(f"Active orders: {[(o.id, o.status, getattr(getattr(o, 'delivery', None), 'status', 'No delivery')) for o in active_orders if hasattr(o, 'delivery')]}")
+    logger.info(f"Delivered orders count: {len(delivered_orders)}")
+    logger.info(f"Delivered orders: {[(o.id, o.status, getattr(getattr(o, 'delivery', None), 'status', 'No delivery')) for o in delivered_orders if hasattr(o, 'delivery')]}")
+    
     context = {
-        'orders': orders,
-        'processing_orders': processing_orders,
-        'shipped_orders': shipped_orders,
+        'active_orders': active_orders,
         'delivered_orders': delivered_orders,
+        'delivery_ratings': delivery_ratings,
+        'debug_active_orders': [(o.id, o.status, getattr(getattr(o, 'delivery', None), 'status', 'No delivery')) for o in active_orders],
+        'debug_delivered_orders': [(o.id, o.status, getattr(getattr(o, 'delivery', None), 'status', 'No delivery')) for o in delivered_orders]
     }
+    
     return render(request, 'order_history.html', context)
 
 @login_required
 @login_required
 def order_detail(request, order_id):
-    order = get_object_or_404(Order, id=order_id, user=request.user)
-    profile = Profile.objects.get(user=request.user)
-    
-    # Get delivery information if it exists
     try:
-        delivery = order.delivery
-        delivery_status_history = delivery.status_history.all()
-    except Delivery.DoesNotExist:
+        order = Order.objects.get(id=order_id)
+        
+        # Check permissions
+        if not (request.user == order.user or request.user.is_staff or 
+                (hasattr(order, 'delivery') and order.delivery and order.delivery.delivery_partner.user == request.user)):
+            messages.error(request, "You don't have permission to view this order.")
+            return redirect('order_history')
+        
+        # Get order items with related data
+        order_items = order.items.all().prefetch_related(
+            'product',
+            'product__reviews',
+            'product__artisan'
+        )
+        
+        # Get user profile
+        profile = order.user.profile
+        
+        # Get delivery information
         delivery = None
         delivery_status_history = None
+        delivery_rating = None
+        try:
+            delivery = order.delivery
+            if delivery:
+                delivery_status_history = delivery.status_history.all().order_by('-timestamp')
+                delivery_rating = delivery.ratings.filter(user=request.user).first()
+        except Exception as e:
+            logger.error(f"Error fetching delivery data for order {order_id}: {str(e)}")
+        
+        # Calculate status progress
+        status_map = {
+            'processing': 25,
+            'shipped': 75,
+            'delivered': 100,
+            'cancelled': 0
+        }
+        status_progress = status_map.get(order.status.lower(), 0)
     
-    # Calculate the status progress
-    status_progress = {
-        'processing': 25,
-        'shipped': 75,
-        'delivered': 100
-    }.get(order.status.lower(), 0)
-    
-    # Fetch all reviews for each product in the order
-    order_items = order.items.all().select_related('product')
-    for item in order_items:
-        item.reviews = Review.objects.filter(product=item.product, user=request.user).order_by('-created_at')
-    
-    context = {
-        'order': order,
-        'order_items': order_items,
-        'profile': profile,
-        'status_progress': status_progress,
-        'user': request.user,
-        'delivery': delivery,
-        'delivery_status_history': delivery_status_history,
-    }
-    return render(request, 'order_detail.html', context)
+        context = {
+            'order': order,
+            'order_items': order_items,
+            'profile': profile,
+            'delivery': delivery,
+            'delivery_status_history': delivery_status_history,
+            'delivery_rating': delivery_rating,
+            'status_progress': status_progress
+        }
+            
+        return render(request, 'order_detail.html', context)
+    except Order.DoesNotExist:
+        messages.error(request, "Order not found.")
+        return redirect('order_history')
+    except Exception as e:
+        messages.error(request, f"An error occurred: {str(e)}")
+        return redirect('order_history')
 
 @login_required
+@require_http_methods(['POST'])
 def update_order_status(request, order_id):
     if not request.user.is_staff:
         return JsonResponse({'error': 'Permission denied'}, status=403)
@@ -1333,6 +1325,7 @@ def update_order_status(request, order_id):
     return JsonResponse({'error': 'Invalid status'}, status=400)
 
 @login_required
+@require_POST
 def add_tracking_number(request, order_id):
     if not request.user.is_staff:
         return JsonResponse({'error': 'Permission denied'}, status=403)
@@ -1443,40 +1436,104 @@ def artisan_dashboard(request):
     return render(request, 'artisan.html', context)
 
 @login_required
-def artisan_earnings(request):
-    artisan = request.user.artisan
-    completed_orders = Order.objects.filter(items__product__artisan=artisan, status='delivered').distinct()
+@user_passes_test(is_delivery_partner)
+def delivery_earnings(request):
+    # Get the delivery partner profile
+    delivery_partner = DeliveryPartner.objects.get(user=request.user)
     
-    total_earnings = completed_orders.aggregate(Sum('total_price'))['total_price__sum'] or 0
-    monthly_earnings = completed_orders.filter(created_at__gte=timezone.now() - timezone.timedelta(days=30)).aggregate(Sum('total_price'))['total_price__sum'] or 0
-    average_order_value = total_earnings / completed_orders.count() if completed_orders.count() > 0 else 0
+    # Get filter parameters
+    date_range = request.GET.get('date_range', 'month')
+    transaction_type = request.GET.get('transaction_type', '')
+    sort_by = request.GET.get('sort', 'date_desc')
     
-    # Monthly earnings data for chart
-    monthly_earnings_data = list(completed_orders.annotate(month=TruncMonth('created_at')).values('month').annotate(earnings=Sum('total_price')).order_by('month'))
-    monthly_earnings_labels = [entry['month'].strftime("%B %Y") for entry in monthly_earnings_data]
-    monthly_earnings_values = [float(entry['earnings']) for entry in monthly_earnings_data]
+    # Calculate earnings for various periods
+    today = timezone.now().date()
+    first_day_of_month = today.replace(day=1)
+    first_day_of_last_month = (first_day_of_month - timezone.timedelta(days=1)).replace(day=1)
+    first_day_of_year = today.replace(month=1, day=1)
     
-    # Top selling products data for chart
-    top_products = Product.objects.filter(artisan=artisan).annotate(sales_count=Count('orderitem')).order_by('-sales_count')[:5]
-    top_products_labels = [product.name for product in top_products]
-    top_products_data = [product.sales_count for product in top_products]
+    # Get earnings data
+    monthly_earnings = DeliveryEarning.objects.filter(
+        delivery__delivery_partner=delivery_partner,
+        created_at__gte=first_day_of_month
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     
-    # Recent transactions
-    recent_transactions = OrderItem.objects.filter(product__artisan=artisan, order__status='delivered').order_by('-order__created_at')[:10]
+    last_month_earnings = DeliveryEarning.objects.filter(
+        delivery__delivery_partner=delivery_partner,
+        created_at__gte=first_day_of_last_month,
+        created_at__lt=first_day_of_month
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    
+    yearly_earnings = DeliveryEarning.objects.filter(
+        delivery__delivery_partner=delivery_partner,
+        created_at__gte=first_day_of_year
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    
+    # Build filter query for transactions
+    query = Q(delivery__delivery_partner=delivery_partner)
+    
+    # Apply date range filter
+    if date_range == 'today':
+        query &= Q(created_at__gte=today)
+    elif date_range == 'week':
+        start_of_week = today - timezone.timedelta(days=today.weekday())
+        query &= Q(created_at__gte=start_of_week)
+    elif date_range == 'month':
+        query &= Q(created_at__gte=first_day_of_month)
+    elif date_range == 'year':
+        query &= Q(created_at__gte=first_day_of_year)
+    
+    # Apply transaction type filter
+    if transaction_type:
+        if transaction_type == 'delivery_fee':
+            query &= Q(delivery_fee__gt=0)
+        elif transaction_type == 'tip':
+            # Assuming tips are stored in a specific way - adjust as needed
+            query &= Q(notes__icontains='tip')
+        elif transaction_type == 'bonus':
+            # Assuming bonuses are stored in a specific way - adjust as needed
+            query &= Q(notes__icontains='bonus')
+    
+    # Apply sorting
+    if sort_by == 'date_asc':
+        order_by = 'created_at'
+    elif sort_by == 'date_desc':
+        order_by = '-created_at'
+    elif sort_by == 'amount_asc':
+        order_by = 'total_amount'
+    elif sort_by == 'amount_desc':
+        order_by = '-total_amount'
+    else:
+        order_by = '-created_at'  # Default sort
+    
+    # Get filtered transactions for the table
+    filtered_earnings = DeliveryEarning.objects.filter(query).order_by(order_by)[:50]
+    
+    transactions = []
+    for earning in filtered_earnings:
+        transaction = {
+            'date': earning.created_at.strftime('%b %d, %Y'),
+            'order_id': earning.delivery.order.id if earning.delivery.order else 'N/A',
+            'delivery_id': earning.delivery.id,
+            'description': f"Delivery earnings for order {earning.delivery.order.id if earning.delivery.order else 'N/A'}",
+            'type': 'delivery_fee',  # Default type
+            'type_display': 'Delivery Fee',
+            'amount': earning.total_amount
+        }
+        transactions.append(transaction)
     
     context = {
-        'total_earnings': total_earnings,
         'monthly_earnings': monthly_earnings,
-        'average_order_value': average_order_value,
-        'completed_orders': completed_orders.count(),
-        'monthly_earnings_labels': json.dumps(monthly_earnings_labels),
-        'monthly_earnings_data': monthly_earnings_values,
-        'top_products_labels': json.dumps(top_products_labels),
-        'top_products_data': top_products_data,
-        'recent_transactions': recent_transactions,
+        'last_month_earnings': last_month_earnings,
+        'yearly_earnings': yearly_earnings,
+        'transactions': transactions,
+        'active_delivery': get_active_delivery(delivery_partner),
+        'date_range': date_range,
+        'transaction_type': transaction_type,
+        'sort_by': sort_by
     }
     
-    return render(request, 'artisan_earnings.html', context)
+    return render(request, 'delivery_earnings.html', context)
 
 @receiver(post_save, sender=User)
 def create_user_cart(sender, instance, created, **kwargs):
@@ -1673,12 +1730,12 @@ def download_product_report(request):
     ]
     summary_table = Table(summary_data, colWidths=[2*inch, 2*inch])
     summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(summary_table)
@@ -1697,7 +1754,6 @@ def download_product_report(request):
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(category_table)
@@ -1731,7 +1787,6 @@ def download_product_report(request):
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('GRID', (0, 0), (-1, -1), 1, colors.black)
     ]))
     elements.append(monthly_table)
@@ -1771,6 +1826,7 @@ def download_product_report(request):
     return FileResponse(buffer, as_attachment=True, filename='product_report.pdf')
 
 @login_required
+@require_http_methods(['POST'])
 def update_order_status(request, order_id):
     if not request.user.is_staff:
         return JsonResponse({'error': 'Permission denied'}, status=403)
@@ -1789,6 +1845,7 @@ def update_order_status(request, order_id):
     return JsonResponse({'error': 'Invalid status'}, status=400)
 
 @login_required
+@require_POST
 def add_tracking_number(request, order_id):
     if not request.user.is_staff:
         return JsonResponse({'error': 'Permission denied'}, status=403)
@@ -1829,7 +1886,6 @@ def simulate_delivery(request, order_id):
                 # Update delivery partner status
                 delivery_partner = delivery.delivery_partner
                 delivery_partner.is_available = True
-                delivery_partner.current_delivery = None
                 delivery_partner.save()
                 
                 # Create delivery rating placeholder
@@ -1882,11 +1938,13 @@ def simulate_delivery(request, order_id):
             
         return redirect('order_detail', order_id=order.id)
     
-    return redirect('order_detail', order_id=order_id)
+    return redirect('order_detail', order_id=order.id)
 
 @login_required
 @user_passes_test(lambda u: u.is_staff)
 def admin_delivery_partners(request):
+    """Admin view for managing delivery partners."""
+    # Handle form submissions for approving/rejecting partners
     if request.method == 'POST':
         partner_id = request.POST.get('partner_id')
         action = request.POST.get('action')
@@ -1897,53 +1955,102 @@ def admin_delivery_partners(request):
             if action == 'approve':
                 partner.status = 'approved'
                 partner.is_available = True
-                messages.success(request, f'Delivery partner {partner.user.get_full_name()} has been approved.')
-            else:  # reject
+                messages.success(request, f"Delivery partner {partner.user.get_full_name()} has been approved.")
+                
+                # Create notification for the partner
+                Notification.objects.create(
+                    user=partner.user,
+                    title='Account Approved',
+                    message='Your delivery partner account has been approved. You can now start accepting deliveries.'
+                )
+            
+            elif action == 'reject':
                 partner.status = 'rejected'
                 partner.is_available = False
-                messages.warning(request, f'Delivery partner {partner.user.get_full_name()} has been rejected.')
+                messages.success(request, f"Delivery partner {partner.user.get_full_name()} has been rejected.")
+                
+                # Create notification for the partner
+                Notification.objects.create(
+                    user=partner.user,
+                    title='Account Rejected',
+                    message='Your delivery partner application has been rejected. Please contact admin for more information.'
+                )
             
             partner.save()
-            
-            # Send email notification to the delivery partner
-            subject = 'Craftsy Delivery Partner Application Update'
-            if action == 'approve':
-                message = 'Congratulations! Your application to become a delivery partner has been approved.'
-            else:
-                message = 'We regret to inform you that your application to become a delivery partner has been rejected.'
-            
-            try:
-                send_mail(
-                    subject,
-                    message,
-                    'noreply@craftsy.com',
-                    [partner.user.email],
-                    fail_silently=True
-                )
-            except Exception as e:
-                messages.warning(request, f'Email notification could not be sent: {str(e)}')
-            
             return redirect('admin_delivery_partners')
     
-    # Get all delivery partners
-    all_partners = DeliveryPartner.objects.all()
+    # Get all partners with status counts
+    partners = DeliveryPartner.objects.select_related('user')
     
-    # Get pending partners
-    pending_partners = all_partners.filter(status='pending')
+    # Calculate metrics for each partner
+    for partner in partners:
+        partner.total_deliveries = Delivery.objects.filter(delivery_partner=partner).count()
+        partner.completed_deliveries = Delivery.objects.filter(
+            delivery_partner=partner, 
+            status='delivered'
+        ).count()
+        
+        # Check if partner has active deliveries despite being marked as available
+        partner.active_deliveries = Delivery.objects.filter(
+            delivery_partner=partner,
+            status__in=['pending', 'picked_up', 'in_transit', 'out_for_delivery']
+        ).count()
+        
+        # Fix partner availability status based on active deliveries
+        if partner.status == 'approved':
+            if partner.active_deliveries > 0:
+                # Partner has active deliveries, should be marked as busy
+                if partner.is_available:
+                    partner.is_available = False
+                    partner.save()
+            else:
+                # Partner has no active deliveries, should be marked as available
+                if not partner.is_available:
+                    partner.is_available = True
+                    partner.save()
+        
+        # Flag inconsistent status
+        partner.status_inconsistent = (partner.is_available and partner.active_deliveries > 0) or \
+                                      (not partner.is_available and partner.active_deliveries == 0 and partner.status == 'approved')
+        
+        # Get current active delivery if any
+        partner.current_delivery = Delivery.objects.filter(
+            delivery_partner=partner,
+            status__in=['pending', 'picked_up', 'in_transit', 'out_for_delivery']
+        ).first()
+        
+        # Calculate success rate if any deliveries
+        if partner.total_deliveries > 0:
+            partner.success_rate = (partner.completed_deliveries / partner.total_deliveries) * 100
+        else:
+            partner.success_rate = 0
     
-    # Get active partners with their statistics
-    active_partners = all_partners.filter(status='approved').annotate(
-        total_deliveries=Count('deliveries'),
-        rating=Avg('delivery_ratings__rating')
-    )
+    # Filter partners by status if requested
+    status_filter = request.GET.get('status')
+    if status_filter:
+        partners = [p for p in partners if p.status == status_filter]
+    
+    # Create lists for the template
+    pending_partners_list = [p for p in partners if p.status == 'pending']
+    active_partners_list = [p for p in partners if p.status == 'approved']
     
     context = {
-        'total_partners': all_partners.count(),
-        'pending_partners': pending_partners.count(),
-        'active_partners': active_partners.count(),
-        'pending_partners_list': pending_partners,
-        'active_partners_list': active_partners,
+        'partners': partners,
+        'pending_count': sum(1 for p in partners if p.status == 'pending'),
+        'approved_count': sum(1 for p in partners if p.status == 'approved'),
+        'suspended_count': sum(1 for p in partners if p.status == 'suspended'),
+        'rejected_count': sum(1 for p in partners if p.status == 'rejected'),
+        'available_count': sum(1 for p in partners if p.is_available and p.status == 'approved'),
+        'busy_count': sum(1 for p in partners if not p.is_available and p.status == 'approved'),
+        'inconsistent_count': sum(1 for p in partners if p.status_inconsistent),
+        # Add these variables for the template
+        'total_partners': len(partners),
+        'pending_partners': len(pending_partners_list),
+        'active_partners': len(active_partners_list),
+        'pending_partners_list': pending_partners_list,
+        'active_partners_list': active_partners_list
     }
+    
     return render(request, 'admin_delivery_partners.html', context)
 
 @login_required
@@ -1964,13 +2071,18 @@ def admin_delivery_partner_details(request, partner_id):
     
     on_time_percentage = (on_time_deliveries / completed_deliveries * 100) if completed_deliveries > 0 else 0
     
+    # Get ratings for deliveries made by this partner
+    ratings = DeliveryRating.objects.filter(
+        delivery__in=deliveries
+    ).order_by('-created_at')[:10]
+    
     context = {
         'partner': partner,
         'total_deliveries': total_deliveries,
         'completed_deliveries': completed_deliveries,
         'on_time_percentage': round(on_time_percentage, 2),
         'recent_deliveries': deliveries.order_by('-created_at')[:10],
-        'ratings': DeliveryRating.objects.filter(delivery_partner=partner).order_by('-created_at')[:10],
+        'ratings': ratings,
     }
     return render(request, 'admin_delivery_partner_details.html', context)
 
@@ -2008,7 +2120,7 @@ def update_delivery_status(request, delivery_id):
         delivery = get_object_or_404(
             Delivery.objects.select_related('delivery_partner', 'order__user'),
             id=delivery_id,
-            delivery_partner=request.user.deliverypartner
+            delivery_partner=request.user.delivery_partner
         )
         
         status = request.POST.get('status')
@@ -2023,7 +2135,7 @@ def update_delivery_status(request, delivery_id):
         if status == 'delivered':
             delivery.actual_delivery_time = timezone.now()
             delivery.delivery_partner.is_available = True
-            delivery.delivery_partner.save(update_fields=['is_available'])
+            delivery.delivery_partner.save()
         
         delivery.save()
         
@@ -2040,7 +2152,7 @@ def update_delivery_status(request, delivery_id):
         if old_status != status:
             Notification.objects.create(
                 user=delivery.order.user,
-                title=f'Delivery Status Update - Order #{delivery.order.id}',
+                title='Delivery Status Update - Order #{delivery.order.id}',
                 message=f'Your delivery status has been updated to: {status.title()}',
                 notification_type='delivery_update',
                 reference_id=delivery.id
@@ -2061,9 +2173,74 @@ def update_delivery_status(request, delivery_id):
 @user_passes_test(is_delivery_partner)
 @require_POST
 def mark_delivery_delivered(request, delivery_id):
-    delivery = get_object_or_404(Delivery, id=delivery_id, delivery_partner=request.user.deliverypartner)
-    delivery.mark_as_delivered()
-    return JsonResponse({'success': True})
+    try:
+        # First try to get the delivery for the current user (whether staff or delivery partner)
+        if request.user.is_staff:
+            delivery = get_object_or_404(Delivery, id=delivery_id)
+        else:
+            delivery = get_object_or_404(Delivery, id=delivery_id, delivery_partner__user=request.user)
+        
+        with transaction.atomic():
+            # Update delivery status
+            delivery.status = 'delivered'
+            delivery.actual_delivery_time = timezone.now()
+            delivery.save()
+            
+            # Update order status
+            delivery.order.status = 'delivered'
+            delivery.order.save()
+            
+            # Mark delivery partner as available
+            delivery_partner = delivery.delivery_partner
+            delivery_partner.is_available = True
+            delivery_partner.save()
+            
+            # Create status history
+            DeliveryStatusHistory.objects.create(
+                delivery=delivery,
+                status='delivered',
+                notes='Delivery completed successfully'
+            )
+            
+            # Create notification for customer
+            Notification.objects.create(
+                user=delivery.order.user,
+                title=f'Order #{delivery.order.id} Delivered',
+                message='Your order has been delivered successfully!'
+            )
+            
+            # Create notification for rating
+            Notification.objects.create(
+                user=delivery.order.user,
+                title=f'Rate Your Delivery',
+                message=f'Please rate your delivery experience for order #{delivery.order.id}'
+            )
+            
+            # Process delivery earnings if applicable
+            try:
+                process_delivery_earnings(request, delivery.id)
+            except Exception as e:
+                logger.error(f"Error processing earnings: {str(e)}")
+            
+            messages.success(request, 'Delivery marked as delivered successfully.')
+            
+            if request.is_ajax():
+                return JsonResponse({'success': True})
+            
+            if request.user.is_staff:
+                return redirect('admin_delivery_dashboard')
+            else:
+                return redirect('delivery_dashboard')
+                
+    except Exception as e:
+        messages.error(request, f'Error marking delivery as delivered: {str(e)}')
+        if request.is_ajax():
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+            
+        if request.user.is_staff:
+            return redirect('admin_delivery_dashboard')
+        else:
+            return redirect('delivery_dashboard')
 
 @login_required
 @user_passes_test(is_delivery_partner)
@@ -2097,7 +2274,7 @@ def get_delivery_route(request, delivery_id):
 @login_required
 @user_passes_test(is_delivery_partner)
 def export_delivery_history(request):
-    delivery_partner = request.user.deliverypartner
+    delivery_partner = request.user.delivery_partner
     deliveries = Delivery.objects.filter(delivery_partner=delivery_partner)
     
     # Create the HttpResponse object with PDF header
@@ -2144,22 +2321,34 @@ def delivery_partner_register(request):
     if request.method == 'POST':
         form = UserRegistrationForm(request.POST, request.FILES)
         if form.is_valid():
-            user = form.save(commit=False)
-            user.user_type = 'delivery_partner'
-            user.save()
+            with transaction.atomic():
+                user = form.save(commit=False)
+                user.user_type = 'delivery_partner'
+                user.save()
+                
+                # Create DeliveryPartner profile
+                delivery_partner = DeliveryPartner.objects.create(
+                    user=user,
+                    vehicle_type=request.POST.get('vehicle_type', ''),
+                    vehicle_number=request.POST.get('vehicle_number', ''),
+                    license_number=request.POST.get('license_number', ''),
+                    license_image=request.FILES.get('license_image'),
+                    id_proof=request.FILES.get('id_proof'),
+                    status='pending'  # Set initial status as pending
+                )
+                
+                # Notify admin about new delivery partner registration
+                admin_users = User.objects.filter(is_staff=True)
+                for admin in admin_users:
+                    Notification.objects.create(
+                        user=admin,
+                        title='New Delivery Partner Registration',
+                        message=f'New delivery partner registration from {user.get_full_name()}. Please review and approve.',
+                        notification_type='delivery_partner_registration',
+                        reference_id=delivery_partner.id
+                    )
             
-            # Create DeliveryPartner profile
-            DeliveryPartner.objects.create(
-                user=user,
-                vehicle_type=request.POST.get('vehicle_type', ''),
-                vehicle_number=request.POST.get('vehicle_number', ''),
-                license_number=request.POST.get('license_number', ''),
-                license_image=request.FILES.get('license_image'),
-                id_proof=request.FILES.get('id_proof'),
-                status='pending'  # Set initial status as pending
-            )
-            
-            messages.success(request, 'Registration successful. Please wait for admin approval.')
+            messages.success(request, 'Registration successful. Please wait for admin approval. You will be notified once your application is reviewed.')
             return redirect('login')
     else:
         form = UserRegistrationForm()
@@ -2228,100 +2417,124 @@ def delivery_profile(request):
 @login_required
 @user_passes_test(is_delivery_partner)
 def delivery_earnings(request):
-    delivery_partner = request.user.deliverypartner
+    # Get the delivery partner profile
+    delivery_partner = DeliveryPartner.objects.get(user=request.user)
     
-    # Get all completed deliveries
-    completed_deliveries = Delivery.objects.filter(
-        delivery_partner=delivery_partner,
-        status='delivered'
-    ).select_related('order')
+    # Calculate earnings for various periods
+    today = timezone.now().date()
+    first_day_of_month = today.replace(day=1)
+    first_day_of_last_month = (first_day_of_month - timezone.timedelta(days=1)).replace(day=1)
+    first_day_of_year = today.replace(month=1, day=1)
     
-    # Calculate earnings with proper profit sharing
-    total_earnings = 0
-    delivery_details = []
+    # Get earnings data
+    monthly_earnings = DeliveryEarning.objects.filter(
+        delivery__delivery_partner=delivery_partner,
+        created_at__gte=first_day_of_month
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     
-    for delivery in completed_deliveries:
-        order = delivery.order
-        order_total = float(order.total_price)
-        
-        # Calculate profit shares
-        artisan_share = order_total * 0.70  # 70% to artisan
-        platform_fee = order_total * 0.10   # 10% platform fee
-        delivery_share = order_total * 0.20  # 20% to delivery partner
-        
-        # Calculate delivery fee
-        base_delivery_fee = 50  # Base delivery fee in rupees
-        
-        # Calculate time-based fee
-        if delivery.actual_delivery_time and delivery.created_at:
-            delivery_time = (delivery.actual_delivery_time - delivery.created_at).total_seconds() / 3600  # Convert to hours
-            distance_fee = delivery_time * 10  # ₹10 per hour
-        else:
-            distance_fee = 0
-            
-        total_delivery_fee = base_delivery_fee + distance_fee
-        
-        # Total earnings for this delivery
-        delivery_total = delivery_share + total_delivery_fee
-        total_earnings += delivery_total
-        
-        # Store delivery details
-        delivery_details.append({
-            'order_id': order.id,
-            'order_total': order_total,
-            'delivery_share': delivery_share,
-            'delivery_fee': total_delivery_fee,
-            'total': delivery_total,
-            'timestamp': delivery.actual_delivery_time,
-            'rating': delivery.ratings.aggregate(Avg('rating'))['rating__avg'] or 0
-        })
+    last_month_earnings = DeliveryEarning.objects.filter(
+        delivery__delivery_partner=delivery_partner,
+        created_at__gte=first_day_of_last_month,
+        created_at__lt=first_day_of_month
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     
-    # Get monthly earnings breakdown
-    monthly_earnings = completed_deliveries.annotate(
-        month=TruncMonth('created_at')
-    ).values('month').annotate(
-        total_orders=Count('id'),
-        base_earnings=Sum(
-            ExpressionWrapper(
-                F('order__total_price') * 0.20,  # 20% of order total
-                output_field=DecimalField(max_digits=10, decimal_places=2)
-            )
-        ),
-        delivery_fees=Sum(
-            ExpressionWrapper(
-                50 + (ExpressionWrapper(
-                    F('actual_delivery_time') - F('created_at'),
-                    output_field=DurationField()
-                ) / timedelta(hours=1) * 10),
-                output_field=DecimalField(max_digits=10, decimal_places=2)
-            )
-        ),
-        avg_rating=Avg('ratings__rating')
-    ).annotate(
-        total_earnings=F('base_earnings') + F('delivery_fees')
-    ).order_by('-month')
+    yearly_earnings = DeliveryEarning.objects.filter(
+        delivery__delivery_partner=delivery_partner,
+        created_at__gte=first_day_of_year
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     
-    # Calculate performance metrics
-    performance_metrics = {
-        'total_deliveries': completed_deliveries.count(),
-        'avg_rating': completed_deliveries.aggregate(
-            avg_rating=Avg('ratings__rating')
-        )['avg_rating'] or 0,
-        'on_time_deliveries': completed_deliveries.filter(
-            actual_delivery_time__lte=F('expected_delivery_time')
-        ).count(),
-        'total_earnings': total_earnings,
-        'avg_earnings_per_delivery': total_earnings / completed_deliveries.count() if completed_deliveries.count() > 0 else 0
-    }
+    # Get transactions for the table
+    transactions = []
+    earnings = DeliveryEarning.objects.filter(
+        delivery__delivery_partner=delivery_partner
+    ).order_by('-created_at')[:50]
+    
+    for earning in earnings:
+        transaction = {
+            'date': earning.created_at.strftime('%b %d, %Y'),
+            'order_id': earning.delivery.order.id if earning.delivery.order else 'N/A',
+            'delivery_id': earning.delivery.id,
+            'description': f"Delivery earnings for order {earning.delivery.order.id if earning.delivery.order else 'N/A'}",
+            'type': 'delivery_fee',  # Default type
+            'type_display': 'Delivery Fee',
+            'amount': earning.total_amount
+        }
+        transactions.append(transaction)
     
     context = {
-        'performance_metrics': performance_metrics,
         'monthly_earnings': monthly_earnings,
-        'delivery_details': sorted(delivery_details, key=lambda x: x['timestamp'] or timezone.now(), reverse=True),
+        'last_month_earnings': last_month_earnings,
+        'yearly_earnings': yearly_earnings,
+        'transactions': transactions,
         'active_delivery': get_active_delivery(delivery_partner)
     }
     
     return render(request, 'delivery_earnings.html', context)
+
+@login_required
+@user_passes_test(is_delivery_partner)
+def export_earnings(request):
+    """Export earnings data as CSV file for download"""
+    # Get the delivery partner profile
+    delivery_partner = DeliveryPartner.objects.get(user=request.user)
+    
+    # Get filter parameters
+    date_range = request.GET.get('date_range', 'month')
+    transaction_type = request.GET.get('transaction_type', '')
+    today = timezone.now().date()
+    
+    # Set date range based on parameter
+    if date_range == 'today':
+        start_date = today
+    elif date_range == 'week':
+        start_date = today - timezone.timedelta(days=today.weekday())
+    elif date_range == 'month':
+        start_date = today.replace(day=1)
+    elif date_range == 'year':
+        start_date = today.replace(month=1, day=1)
+    elif date_range == 'all':
+        start_date = None
+    else:
+        start_date = today.replace(day=1)  # Default to current month
+    
+    # Build query based on filters
+    query = Q(delivery__delivery_partner=delivery_partner)
+    if start_date:
+        query &= Q(created_at__gte=start_date)
+    
+    # Add transaction type filter if specified
+    if transaction_type:
+        if transaction_type == 'delivery_fee':
+            query &= Q(delivery_fee__gt=0)
+        elif transaction_type == 'tip':
+            # Assuming tips are stored in a specific way - adjust as needed
+            query &= Q(notes__icontains='tip')
+        elif transaction_type == 'bonus':
+            # Assuming bonuses are stored in a specific way - adjust as needed
+            query &= Q(notes__icontains='bonus')
+    
+    earnings = DeliveryEarning.objects.filter(query).order_by('-created_at')
+    
+    # Create the HttpResponse object with CSV header
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="earnings_export_{today.strftime("%Y%m%d")}.csv"'
+    
+    # Create CSV writer
+    writer = csv.writer(response)
+    writer.writerow(['Date', 'Order ID', 'Description', 'Base Amount', 'Delivery Fee', 'Total Amount (₹)'])
+    
+    # Add data to CSV
+    for earning in earnings:
+        writer.writerow([
+            earning.created_at.strftime('%Y-%m-%d %H:%M'),
+            earning.delivery.order.id if earning.delivery.order else 'N/A',
+            f"Delivery earnings for order {earning.delivery.order.id if earning.delivery.order else 'N/A'}",
+            earning.base_amount,
+            earning.delivery_fee,
+            earning.total_amount
+        ])
+    
+    return response
 
 @login_required
 @user_passes_test(is_delivery_partner)
@@ -2331,7 +2544,7 @@ def process_delivery_earnings(request, delivery_id):
         delivery = get_object_or_404(
             Delivery.objects.select_related('order', 'delivery_partner'),
             id=delivery_id,
-            delivery_partner=request.user.deliverypartner,
+            delivery_partner=request.user.delivery_partner,
             status='delivered'
         )
         
@@ -2372,6 +2585,11 @@ def process_delivery_earnings(request, delivery_id):
                 notification_type='earnings'
             )
             
+            # Update delivery partner's balance
+            delivery_partner = delivery.delivery_partner
+            delivery_partner.balance += total_earnings
+            delivery_partner.save()
+            
             return JsonResponse({
                 'success': True,
                 'message': 'Earnings processed successfully',
@@ -2391,9 +2609,20 @@ def process_delivery_earnings(request, delivery_id):
 @login_required
 @user_passes_test(lambda u: u.is_staff)
 def pending_delivery_partners(request):
-    partners = DeliveryPartner.objects.filter(status='pending')
+    # Get all pending partners with related user data
+    partners = DeliveryPartner.objects.filter(status='pending').select_related('user')
+    
+    # Add additional context for each partner
+    for partner in partners:
+        partner.full_name = partner.user.get_full_name()
+        partner.email = partner.user.email
+        partner.registration_date = partner.user.date_joined
+    
     context = {
-        'partners': partners
+        'partners': partners,
+        'pending_count': partners.count(),
+        'page_title': 'Pending Delivery Partner Applications',
+        'section': 'delivery_partners'
     }
     return render(request, 'admin/pending_delivery_partners.html', context)
 
@@ -2405,10 +2634,26 @@ def approve_delivery_partner(request, partner_id):
         action = request.POST.get('action')
         if action == 'approve':
             partner.status = 'approved'
+            partner.is_available = True  # Set availability to True when approved
             messages.success(request, f'Delivery partner {partner.user.get_full_name()} has been approved.')
+            
+            # Create notification for the delivery partner
+            Notification.objects.create(
+                user=partner.user,
+                title='Account Approved',
+                message='Your delivery partner account has been approved. You can now start accepting deliveries.'
+            )
         elif action == 'reject':
             partner.status = 'rejected'
+            partner.is_available = False
             messages.warning(request, f'Delivery partner {partner.user.get_full_name()} has been rejected.')
+            
+            # Create notification for the delivery partner
+            Notification.objects.create(
+                user=partner.user,
+                title='Account Rejected',
+                message='Your delivery partner account application has been rejected. Please contact admin for more information.'
+            )
         partner.save()
     return redirect('pending_delivery_partners')
 
@@ -2465,7 +2710,7 @@ def assign_delivery(request, order_id):
     
     # Get available delivery partners
     available_partners = DeliveryPartner.objects.filter(
-        status='active'
+        status='approved'
     ).annotate(
         active_deliveries=Count('deliveries', filter=Q(deliveries__status__in=['pending', 'in_transit']))
     ).filter(active_deliveries__lt=3)  # Limit to partners with less than 3 active deliveries
@@ -2576,11 +2821,11 @@ def download_invoice(request, order_id):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
     elements = []
-
+    
     # Styles
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='Center', alignment=1))
-    styles.add(ParagraphStyle(name='Right', alignment=2))
+    styles.add(ParagraphStyle('Center', alignment=1))
+    styles.add(ParagraphStyle('Right', alignment=2))
 
     # Header
     elements.append(Paragraph("Craftsy", styles['Title']))
@@ -2597,9 +2842,9 @@ def download_invoice(request, order_id):
     invoice_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
         ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
     ]))
     elements.append(invoice_table)
     elements.append(Spacer(1, 0.25*inch))
@@ -2636,7 +2881,7 @@ def download_invoice(request, order_id):
     # Total
     data.append(['', '', '', 'Total:', f"${order.total_price:.2f}"])
 
-    table = Table(data, colWidths=[2.5*inch, 1.5*inch, 1*inch, 1*inch, 1*inch])
+    table = Table(data)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -2703,7 +2948,7 @@ def download_earnings_report(request):
     buffer = BytesIO()
     
     # Create the PDF object
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
     elements = []
     
     # Styles
@@ -2842,135 +3087,115 @@ def download_earnings_report(request):
 @login_required
 @user_passes_test(is_delivery_partner)
 def delivery_dashboard(request):
-    delivery_partner = get_object_or_404(DeliveryPartner, user=request.user)
-    
-    # Get notification data
-    unread_notifications_count = request.user.notifications.filter(is_read=False).count()
-    recent_notifications = request.user.notifications.all()[:5]  # Get 5 most recent notifications
-    
-    # Get active deliveries
-    deliveries = Delivery.objects.filter(
-        delivery_partner=delivery_partner
-    ).exclude(
-        status='delivered'
-    ).order_by('-created_at')
-    
-    # Get delivery statistics
-    total_deliveries = Delivery.objects.filter(delivery_partner=delivery_partner).count()
-    completed_deliveries = Delivery.objects.filter(
-        delivery_partner=delivery_partner,
-        status='delivered'
-    ).count()
-    in_transit_deliveries = Delivery.objects.filter(
-        delivery_partner=delivery_partner,
-        status='in_transit'
-    ).count()
-    
-    # Calculate earnings
-    total_earnings = DeliveryRating.objects.filter(
-        delivery_partner=delivery_partner,
-        delivery__status='delivered'
-    ).aggregate(
-        total=Sum('delivery__order__total_price')
-    )['total'] or 0
-    
-    context = {
-        'delivery_partner': delivery_partner,
-        'deliveries': deliveries,
-        'total_deliveries': total_deliveries,
-        'completed_deliveries': completed_deliveries,
-        'in_transit_deliveries': in_transit_deliveries,
-        'total_earnings': total_earnings,
-        # Add notification data to context
-        'unread_notifications_count': unread_notifications_count,
-        'recent_notifications': recent_notifications,
-    }
-    
-    return render(request, 'delivery_dashboard.html', context)
+    try:
+        delivery_partner = request.user.delivery_partner
+        
+        # Get all active deliveries
+        active_deliveries = get_active_delivery(delivery_partner)
+        
+        # Get all completed deliveries
+        completed_deliveries = Delivery.objects.filter(
+            delivery_partner=delivery_partner,
+            status='delivered'
+        ).order_by('-actual_delivery_time')
+        
+        ratings = DeliveryRating.objects.filter(
+            delivery__in=completed_deliveries
+        ).select_related('user', 'delivery')
+        
+        avg_rating = delivery_partner.rating if hasattr(delivery_partner, 'rating') else 0
+        
+        context = {
+            'active_deliveries': active_deliveries,  # Changed from active_delivery to active_deliveries
+            'active_delivery_count': active_deliveries.count(),  # Add count for template use
+            'completed_deliveries': completed_deliveries,
+            'ratings': ratings,
+            'avg_rating': avg_rating,
+            'total_deliveries': completed_deliveries.count(),
+            'recent_notifications': Notification.objects.filter(user=request.user).order_by('-created_at')[:5],
+            'unread_notifications_count': Notification.objects.filter(user=request.user, is_read=False).count()
+        }
+        return render(request, 'delivery_dashboard.html', context)
+    except DeliveryPartner.DoesNotExist:
+        messages.error(request, 'You are not registered as a delivery partner.')
+        return redirect('home')
 
 @login_required
 @user_passes_test(is_delivery_partner)
 def delivery_history(request):
-    delivery_partner = request.user.deliverypartner
-    
-    # Get all deliveries for this partner
-    deliveries = Delivery.objects.filter(
-        delivery_partner=delivery_partner
-    ).order_by('-created_at')
-    
-    # Filter by status if provided
-    status_filter = request.GET.get('status')
-    if status_filter:
-        deliveries = deliveries.filter(status=status_filter)
-    
-    # Filter by date range if provided
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
-    if start_date and end_date:
-        try:
-            start_date = timezone.datetime.strptime(start_date, '%Y-%m-%d')
-            end_date = timezone.datetime.strptime(end_date, '%Y-%m-%d')
-            deliveries = deliveries.filter(created_at__range=[start_date, end_date])
-        except ValueError:
-            messages.error(request, 'Invalid date format. Please use YYYY-MM-DD.')
-    
-    # Calculate statistics
-    total_deliveries = deliveries.count()
-    completed_deliveries = deliveries.filter(status='delivered').count()
-    total_earnings = deliveries.filter(status='delivered').aggregate(
-        Sum('order__total_price'))['order__total_price__sum'] or 0
-    
-    # Get delivery ratings
-    ratings = DeliveryRating.objects.filter(
-        delivery_partner=delivery_partner
-    ).select_related('delivery')
-    
-    context = {
-        'deliveries': deliveries,
-        'total_deliveries': total_deliveries,
-        'completed_deliveries': completed_deliveries,
-        'total_earnings': total_earnings,
-        'ratings': ratings,
-        'status_filter': status_filter,
-        'start_date': start_date,
-        'end_date': end_date
-    }
-    
-    return render(request, 'delivery_history.html', context)
+    try:
+        delivery_partner = request.user.delivery_partner
+        
+        # Get all deliveries for this partner
+        deliveries = Delivery.objects.filter(
+            delivery_partner=delivery_partner
+        ).order_by('-actual_delivery_time')
+        
+        # Filter by status if provided
+        status_filter = request.GET.get('status')
+        if status_filter:
+            deliveries = deliveries.filter(status=status_filter)
+        
+        # Filter by date range if provided
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        if start_date and end_date:
+            try:
+                start_date = timezone.datetime.strptime(start_date, '%Y-%m-%d')
+                end_date = timezone.datetime.strptime(end_date, '%Y-%m-%d')
+                deliveries = deliveries.filter(created_at__range=[start_date, end_date])
+            except ValueError:
+                messages.error(request, 'Invalid date format. Please use YYYY-MM-DD.')
+        
+        # Calculate statistics
+        total_deliveries = deliveries.count()
+        completed_deliveries = deliveries.filter(status='delivered').count()
+        total_earnings = DeliveryEarning.objects.filter(
+            delivery_partner=delivery_partner,
+            delivery__status='delivered'
+        ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        
+        # Get delivery ratings
+        ratings = DeliveryRating.objects.filter(
+            delivery__delivery_partner=delivery_partner
+        ).select_related('delivery', 'user')
+        
+        context = {
+            'deliveries': deliveries,
+            'total_deliveries': total_deliveries,
+            'completed_deliveries': completed_deliveries,
+            'total_earnings': total_earnings,
+            'ratings': ratings,
+            'status_filter': status_filter,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        
+        return render(request, 'delivery_history.html', context)
+    except DeliveryPartner.DoesNotExist:
+        messages.error(request, 'You are not registered as a delivery partner.')
+        return redirect('home')
 
 @login_required
 @user_passes_test(is_delivery_partner)
 def delivery_tracking(request, delivery_id):
+    # Get the delivery
     delivery = get_object_or_404(Delivery, id=delivery_id)
     
-    # Ensure the delivery partner can only track their assigned deliveries
-    if delivery.delivery_partner.user != request.user:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({
-                'success': False,
-                'message': "You are not authorized to track this delivery."
-            })
-        messages.error(request, "You are not authorized to track this delivery.")
-        return redirect('delivery_dashboard')
-    
-    # Check if delivery is active
-    if delivery.status in ['delivered', 'cancelled']:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({
-                'success': False,
-                'message': "This delivery is no longer active."
-            })
-        messages.warning(request, "This delivery is no longer active.")
-        return redirect('delivery_dashboard')
+    # Check if user has permission to view this delivery
+    if not (request.user.is_staff or 
+            (hasattr(delivery.order, 'user') and request.user == delivery.order.user) or 
+            (delivery.delivery_partner and hasattr(delivery.delivery_partner, 'user') and request.user == delivery.delivery_partner.user)):
+        messages.error(request, "You don't have permission to view this delivery.")
+        return redirect('home')
     
     if request.method == 'POST':
-        action = request.POST.get('action')
-        
-        if action == 'update_status':
+        # Process status updates
+        if 'status' in request.POST:
             new_status = request.POST.get('status')
             notes = request.POST.get('notes', '')
             
-            if new_status in dict(Delivery.STATUS_CHOICES):
+            if new_status in ['pending', 'in_transit', 'delivered', 'failed', 'cancelled']:
                 old_status = delivery.status
                 delivery.status = new_status
                 delivery.save()
@@ -2983,52 +3208,29 @@ def delivery_tracking(request, delivery_id):
                 )
                 
                 # Create notification for customer
-                Notification.objects.create(
-                    user=delivery.order.user,
-                    title='Delivery Update',
-                    message=f'Your order #{delivery.order.id} is {new_status}',
-                    notification_type='delivery_update'
-                )
-                
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    response_data = {
-                        'success': True,
-                        'message': f'Delivery status updated to {new_status}',
-                        'status': new_status,
-                        'status_display': delivery.get_status_display(),
-                    }
-                    
-                    if new_status == 'delivered':
-                        delivery.mark_as_delivered()
-                        response_data['redirect'] = reverse('delivery_dashboard')
-                    
-                    return JsonResponse(response_data)
+                try:
+                    Notification.objects.create(
+                        user=delivery.order.user,
+                        message=f'Your order #{delivery.order.id} status has been updated to {new_status}',
+                        notification_type='delivery_update'
+                    )
+                except:
+                    pass
                 
                 messages.success(request, f'Delivery status updated to {new_status}')
                 
                 if new_status == 'delivered':
-                    delivery.mark_as_delivered()
                     return redirect('delivery_dashboard')
             else:
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({
-                        'success': False,
-                        'message': 'Invalid status value provided.'
-                    })
                 messages.error(request, 'Invalid status value provided.')
     
     # Get status history
-    status_history = delivery.status_history.all().order_by('-timestamp')
+    status_history = delivery.status_history.all().order_by('-created_at')
     
     context = {
         'delivery': delivery,
         'status_history': status_history,
-        'status_choices': [
-            status for status in Delivery.STATUS_CHOICES 
-            if status[0] not in ['cancelled', 'failed']
-        ],
         'active_delivery': delivery,
-        'order_items': delivery.order.items.all(),
     }
     
     return render(request, 'delivery_tracking.html', context)
@@ -3036,218 +3238,173 @@ def delivery_tracking(request, delivery_id):
 @login_required
 @user_passes_test(is_delivery_partner)
 def delivery_order_details(request, delivery_id):
-    delivery = get_object_or_404(Delivery, id=delivery_id)
+    # Ensure delivery partner can only view their assigned deliveries
+    delivery = get_object_or_404(Delivery, id=delivery_id, delivery_partner=request.user.delivery_partner)
     
-    # Ensure the delivery partner can only view their assigned deliveries
-    if delivery.delivery_partner.user != request.user:
-        messages.error(request, "You are not authorized to view this delivery.")
-        return redirect('delivery_dashboard')
-    
-    if request.method == 'POST':
-        action = request.POST.get('action')
-        notes = request.POST.get('notes', '')
-        
-        if action == 'update_status':
-            new_status = request.POST.get('status')
-            if new_status in dict(Delivery.STATUS_CHOICES):
-                old_status = delivery.status
-                delivery.status = new_status
-                delivery.save()
-                
-                # Create status history entry
-                DeliveryStatusHistory.objects.create(
-                    delivery=delivery,
-                    status=new_status,
-                    notes=notes
-                )
-                
-                # Update order status based on delivery status
-                if new_status == 'picked_up':
-                    delivery.order.status = 'shipped'
-                elif new_status == 'delivered':
-                    delivery.order.status = 'delivered'
-                    delivery.order.delivered_at = timezone.now()
-                delivery.order.save()
-                
-                # Create notifications
-                Notification.objects.create(
-                    user=delivery.order.user,
-                    title='Delivery Status Update',
-                    message=f'Your order #{delivery.order.id} status has been updated to {new_status}',
-                    notification_type='delivery_update'
-                )
-                
-                messages.success(request, f'Delivery status updated to {new_status}')
-                
-                # If delivered, update delivery partner availability
-                if new_status == 'delivered':
-                    delivery.delivery_partner.is_available = True
-                    delivery.delivery_partner.save()
-                    
-                    # Create notification for customer to rate delivery
-                    Notification.objects.create(
-                        user=delivery.order.user,
-                        title='Rate Your Delivery',
-                        message=f'Please rate your delivery experience for order #{delivery.order.id}',
-                        notification_type='delivery_rating_request'
-                    )
-        
-        elif action == 'add_note':
-            DeliveryStatusHistory.objects.create(
-                delivery=delivery,
-                status=delivery.status,
-                notes=notes
-            )
-            messages.success(request, 'Delivery note added successfully')
+    # Get order items with product details
+    order_items = delivery.order.items.all().select_related('product')
     
     # Get status history
     status_history = delivery.status_history.all().order_by('-timestamp')
     
-    # Get order items
-    order_items = delivery.order.items.all()
-    
     context = {
         'delivery': delivery,
-        'status_history': status_history,
+        'order': delivery.order,
         'order_items': order_items,
-        'status_choices': Delivery.STATUS_CHOICES,
-        'active_delivery': delivery if delivery.status not in ['delivered', 'cancelled'] else None,
+        'status_history': status_history,
+        'active_deliveries': get_active_delivery(request.user.delivery_partner),
+        'delivery_partner': request.user.delivery_partner
     }
     
     return render(request, 'delivery_order_details.html', context)
 
 @login_required
-@require_POST
-def classify_image(request):
+@require_http_methods(['POST'])
+def update_delivery_status(request, delivery_id):
     try:
-        if 'image' not in request.FILES:
-            return JsonResponse({'error': 'No image file provided'}, status=400)
-        
-        image_file = request.FILES['image']
-        
-        # Open and convert image to RGB
-        image = Image.open(image_file).convert('RGB')
-        
-        # Get the image classifier (using the cached function)
-        processor, model = get_image_classifier()
-        
-        # Process the image
-        inputs = processor(images=image, return_tensors="pt")
-        
-        # Get model predictions
-        with torch.no_grad():
-            outputs = model(**inputs)
-            logits = outputs.logits
-            
-            # Get probabilities
-            probabilities = torch.nn.functional.softmax(logits, dim=-1)[0]
-            
-            # Get top 5 predictions
-            top_5_probs, top_5_indices = torch.topk(probabilities, 5)
-            
-            # Convert predictions to list of (probability, class_name) tuples
-            predictions = []
-            for prob, idx in zip(top_5_probs, top_5_indices):
-                class_name = model.config.id2label[idx.item()]
-                predictions.append((float(prob), class_name))
-            
-            # Map the predictions to our custom categories
-            predicted_category = Product.map_prediction_to_category(predictions)
-            
-            # Get the confidence score for the top prediction
-            confidence = float(top_5_probs[0]) * 100
-            
-            # Log the prediction details
-            logger.info(f"Image classification - Category: {predicted_category}, Confidence: {confidence:.2f}%")
-            logger.info(f"Top 5 predictions: {predictions}")
-            
-            if confidence < 1 or confidence > 100:
-                logger.error(f"Invalid confidence score: {confidence}")
-                raise ValueError("Invalid confidence score calculated")
-            
+        # Get the delivery object
+        delivery = get_object_or_404(Delivery, id=delivery_id)
+
+        # Check permissions
+        if not (request.user.is_staff or request.user == delivery.delivery_partner):
+            return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+        # Parse request data
+        data = json.loads(request.body)
+        new_status = data.get('status', '').lower()  # Ensure lowercase
+        notes = data.get('notes', '')
+
+        # Validate status
+        valid_statuses = ['pending', 'in_transit', 'delivered', 'failed', 'cancelled']
+        if new_status not in valid_statuses:
             return JsonResponse({
-                'success': True,
-                'classification': predicted_category,
-                'confidence': round(confidence, 2),
-                'top_predictions': [
-                    {'class': pred[1], 'confidence': round(float(pred[0]) * 100, 2)}
-                    for pred in predictions
-                ]
-            })
+                'success': False, 
+                'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
+            }, status=400)
+
+        # Store old status for notification
+        old_status = delivery.status
+
+                # Update delivery status
+        delivery.status = new_status
+        delivery.save()
+
+        # Create status history entry
+        DeliveryStatusHistory.objects.create(
+                    delivery=delivery,
+                    status=new_status,
+                    notes=notes
+                )
+
+        # Create notification for status change
+        if old_status != new_status:
+            notification_message = f'Delivery #{delivery.id} status changed from {old_status} to {new_status}'
+            if notes:
+                notification_message += f'. Notes: {notes}'
             
-    except ValueError as ve:
-        logger.error(f"Value error in image classification: {str(ve)}")
-        return JsonResponse({
-            'success': False,
-            'error': 'Invalid classification result',
-            'details': str(ve)
-        }, status=400)
+            # Notify customer
+                Notification.objects.create(
+                    user=delivery.order.user,
+                message=notification_message,
+                    notification_type='delivery_update'
+                )
+
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Delivery status updated successfully'
+                })
+
+    except Delivery.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON data'}, status=400)
     except Exception as e:
-        logger.error(f"Error in image classification: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+@user_passes_test(is_delivery_partner)
+@require_POST
+def update_delivery_location(request, delivery_id):
+    """Update delivery partner's current location."""
+    if not is_delivery_partner(request.user):
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    
+    try:
+        delivery = get_object_or_404(Delivery, id=delivery_id)
+        
+        # Verify this delivery is assigned to the partner
+        if delivery.delivery_partner.user != request.user:
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+        
+        data = json.loads(request.body)
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        
+        if not (latitude and longitude):
+            return JsonResponse({'error': 'Missing coordinates'}, status=400)
+        
+        # Create route point
+        DeliveryRoute.objects.create(
+            delivery=delivery,
+            latitude=latitude,
+            longitude=longitude
+        )
+        
+        # Update delivery partner's current location
+        delivery_partner = delivery.delivery_partner
+        delivery_partner.current_location_lat = latitude
+        delivery_partner.current_location_lng = longitude
+        delivery_partner.save()
+        
+        # Send location update via WebSocket
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'delivery_{delivery_id}',
+            {
+                'type': 'location_update',
+                'latitude': latitude,
+                'longitude': longitude
+            }
+        )
+        
+        return JsonResponse({'success': True})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+def get_delivery_tracking(request, delivery_id):
+    """View for delivery tracking data (used by map)."""
+    try:
+        delivery = get_object_or_404(Delivery, id=delivery_id)
+        
+        # Get delivery route points (if using DeliveryRoute model)
+        route_points = []
+        try:
+            route_points = DeliveryRoute.objects.filter(
+                delivery=delivery
+            ).order_by('timestamp').values('latitude', 'longitude', 'timestamp')
+        except:
+            # If DeliveryRoute model doesn't exist or no data
+            route_points = []
+        
+        # Get the latest location (simplified)
+        location = None
+        if delivery.delivery_partner and hasattr(delivery.delivery_partner, 'current_location'):
+            location = delivery.delivery_partner.current_location
+        
+        return JsonResponse({
+            'success': True,
+            'delivery_id': delivery.id,
+            'status': delivery.status,
+            'route_points': list(route_points),
+            'location': location
+        })
+    except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': 'Failed to process image',
-            'details': str(e)
+            'error': str(e)
         }, status=500)
-
-@login_required
-def notifications(request):
-    """View to display all notifications for a user."""
-    notifications = request.user.notifications.all().order_by('-created_at')
-    
-    if request.GET.get('format') == 'json':
-        return JsonResponse({
-            'notifications': [{
-                'id': n.id,
-                'title': n.title,
-                'message': n.message,
-                'created_at': n.created_at.isoformat(),
-                'is_read': n.is_read
-            } for n in notifications]
-        })
-    
-    context = {
-        'notifications': notifications,
-        'page_title': 'Notifications'
-    }
-    return render(request, 'notifications.html', context)
-
-@login_required
-def unread_notifications_count(request):
-    """Get the count of unread notifications for a user."""
-    count = request.user.notifications.filter(is_read=False).count()
-    return JsonResponse({'count': count})
-
-@login_required
-@require_POST
-def mark_notification_read(request, notification_id):
-    """Mark a specific notification as read."""
-    notification = get_object_or_404(Notification, id=notification_id, user=request.user)
-    notification.is_read = True
-    notification.save()
-    return JsonResponse({'success': True})
-
-@login_required
-@require_POST
-def mark_all_notifications_read(request):
-    """Mark all notifications as read for a user."""
-    request.user.notifications.filter(is_read=False).update(is_read=True)
-    return JsonResponse({'success': True})
-
-@login_required
-@user_passes_test(lambda u: u.is_staff)
-def unassigned_orders(request):
-    """View to display orders that need delivery assignment."""
-    orders = Order.objects.filter(
-        status='confirmed',
-        delivery__isnull=True
-    ).select_related('user__profile').order_by('-created_at')
-
-    context = {
-        'orders': orders,
-        'page_title': 'Unassigned Orders'
-    }
-    return render(request, 'unassigned_orders.html', context)
 
 @login_required
 @user_passes_test(lambda u: u.is_staff)
@@ -3259,87 +3416,66 @@ def update_delivery_status(request, delivery_id):
     delivery = get_object_or_404(Delivery, id=delivery_id)
     
     if request.method == 'POST':
-        new_status = request.POST.get('status')
-        notes = request.POST.get('notes', '')
-        
-        if new_status in dict(Delivery.STATUS_CHOICES):
+        try:
+            data = json.loads(request.body)
+            new_status = data.get('status', '').lower()
+            notes = data.get('notes', '')
+            location = data.get('location', '')
+            
+            valid_statuses = [status[0].lower() for status in Delivery.STATUS_CHOICES]
+            if new_status not in valid_statuses:
+                return JsonResponse({'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'}, status=400)
+            
             try:
                 with transaction.atomic():
                     # Update delivery status
+                    old_status = delivery.status
                     delivery.status = new_status
+                    
                     if new_status == 'delivered':
                         delivery.actual_delivery_time = timezone.now()
+                        # Mark delivery partner as available
+                        delivery_partner = delivery.delivery_partner
+                        delivery_partner.is_available = True
+                        delivery_partner.save()
                     delivery.save()
                     
                     # Create status history
                     DeliveryStatusHistory.objects.create(
                         delivery=delivery,
                         status=new_status,
-                        notes=notes
+                        notes=notes,
+                        location=location,
+                        updated_by=request.user
                     )
                     
                     # Update order status if delivered
                     if new_status == 'delivered':
                         delivery.order.status = 'delivered'
                         delivery.order.save()
+                        
+                        # Process delivery earnings
+                        process_delivery_earnings(request, delivery.id)
                     
                     # Create notification for customer
                     Notification.objects.create(
                         user=delivery.order.user,
                         title='Delivery Update',
-                        message=f'Your order #{delivery.order.id} status has been updated to {new_status}'
+                        message=f'Your order #{delivery.order.id} status has been updated to {new_status}',
+                        notification_type='delivery_update'
                     )
                     
-                    return JsonResponse({'success': True})
+                    return JsonResponse({
+                        'success': True,
+                        'status': new_status,
+                        'message': f'Delivery status updated to {new_status}'
+                    })
             except Exception as e:
                 return JsonResponse({'error': str(e)}, status=500)
-        else:
-            return JsonResponse({'error': 'Invalid status'}, status=400)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON data'}, status=400)
     
     return JsonResponse({'error': 'Method not allowed'}, status=405)
-
-import csv
-@login_required
-@user_passes_test(lambda u: u.is_staff)
-def export_unassigned_orders(request):
-    """Export unassigned orders to CSV/Excel"""
-    # Get unassigned orders
-    orders = Order.objects.filter(
-        status='confirmed',
-        delivery__isnull=True
-    ).select_related('user__profile')
-
-    # Create the HttpResponse object with CSV header
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="unassigned_orders.csv"'
-
-    # Create CSV writer
-    writer = csv.writer(response)
-    writer.writerow([
-        'Order ID',
-        'Customer Name',
-        'Email',
-        'Address',
-        'City',
-        'State',
-        'Order Date',
-        'Total Amount'
-    ])
-
-    # Write data rows
-    for order in orders:
-        writer.writerow([
-            order.id,
-            order.user.get_full_name(),
-            order.user.email,
-            order.user.profile.street_address,
-            order.user.profile.city,
-            order.user.profile.state,
-            order.created_at.strftime('%Y-%m-%d %H:%M'),
-            order.total_price
-        ])
-
-    return response
 
 @login_required
 @user_passes_test(lambda u: u.is_staff)
@@ -3417,7 +3553,7 @@ def admin_delivery_monitoring(request):
             if time_difference > expected_difference:
                 delivery.delay_status = 'delayed'
                 delivery.delay_time = time_difference - expected_difference
-            else:
+        else:
                 delivery.delay_status = 'on_time'
                 delivery.remaining_time = expected_difference - time_difference
     
@@ -3475,7 +3611,8 @@ def admin_delivery_analytics(request):
             ExpressionWrapper(
                 F('deliveries__actual_delivery_time') - F('deliveries__created_at'),
                 output_field=DurationField()
-            )
+            ),
+            filter=Q(deliveries__status='delivered')
         )
     ).order_by('-total_deliveries')
     
@@ -3533,7 +3670,7 @@ def admin_delivery_reports(request):
                 ),
                 filter=Q(status='delivered')
             ),
-            avg_rating=Avg('delivery_ratings__rating')
+            avg_rating=Avg('delivery_ratings__rating'),
         ).order_by('date')
     elif report_type == 'weekly':
         report_data = deliveries.annotate(
@@ -3549,7 +3686,7 @@ def admin_delivery_reports(request):
                 ),
                 filter=Q(status='delivered')
             ),
-            avg_rating=Avg('delivery_ratings__rating')
+            avg_rating=Avg('delivery_ratings__rating'),
         ).order_by('week')
     else:  # monthly
         report_data = deliveries.annotate(
@@ -3565,7 +3702,7 @@ def admin_delivery_reports(request):
                 ),
                 filter=Q(status='delivered')
             ),
-            avg_rating=Avg('delivery_ratings__rating')
+            avg_rating=Avg('delivery_ratings__rating'),
         ).order_by('month')
     
     if request.GET.get('format') == 'pdf':
@@ -3598,9 +3735,7 @@ def admin_delivery_partner_performance(request, partner_id):
     completion_rate = (completed_deliveries / total_deliveries * 100) if total_deliveries > 0 else 0
     
     # Calculate average ratings
-    avg_rating = DeliveryRating.objects.filter(
-        delivery_partner=partner
-    ).aggregate(Avg('rating'))['rating__avg'] or 0
+    avg_rating = DeliveryRating.objects.filter(delivery_partner=partner).aggregate(Avg('rating'))['rating__avg'] or 0
     
     # Calculate on-time delivery performance
     on_time_deliveries = deliveries.filter(
@@ -3685,15 +3820,13 @@ def admin_reassign_delivery(request, delivery_id):
             Notification.objects.create(
                 user=new_partner.user,
                 title='New Delivery Assignment',
-                message=f'You have been assigned to deliver order #{delivery.order.id}',
-                notification_type='delivery_assignment'
+                message=f'You have been assigned to deliver order #{delivery.order.id}'
             )
             
             Notification.objects.create(
                 user=delivery.order.user,
                 title='Delivery Update',
-                message=f'Your delivery has been reassigned to a new delivery partner',
-                notification_type='delivery_update'
+                message=f'Your delivery has been reassigned to a new delivery partner'
             )
             
         return JsonResponse({'success': True})
@@ -3835,8 +3968,7 @@ def handle_delivery_earnings(sender, instance, created, **kwargs):
                     total_amount=total_earnings,
                     artisan_share=artisan_share,
                     platform_fee=platform_fee,
-                    status='processed',
-                    processed_at=timezone.now()
+                    status='processed'
                 )
                 
                 # Create notification
@@ -3924,12 +4056,1038 @@ def mark_earnings_as_paid(request, earning_id):
                 notification_type='payment'
             )
             
-        return JsonResponse({
-            'success': True,
-            'message': 'Earnings marked as paid successfully'
-        })
+        return JsonResponse({'success': True})
     except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@require_POST
+def rate_delivery(request, delivery_id):
+    """View for rating a delivery"""
+    try:
+        delivery = get_object_or_404(Delivery, id=delivery_id)
+        
+        # Check if this is the customer's delivery
+        if delivery.order.user != request.user:
+            messages.error(request, "You are not authorized to rate this delivery.")
+            return redirect('order_history')
+        
+        # Check if delivery is completed
+        if delivery.status.lower() != 'delivered':
+            messages.error(request, "Cannot rate an undelivered order.")
+            return redirect('order_detail', order_id=delivery.order.id)
+        
+        # Check if already rated
+        if DeliveryRating.objects.filter(delivery=delivery).exists():
+            return JsonResponse({'error': 'Delivery already rated'}, status=400)
+        
+        data = json.loads(request.body)
+        rating = data.get('rating')
+        comment = data.get('comment', '')
+        
+        if not rating or not isinstance(rating, (int, float)) or rating < 1 or rating > 5:
+            return JsonResponse({'error': 'Invalid rating. Must be between 1 and 5'}, status=400)
+        
+        # Create the rating
+        DeliveryRating.objects.create(
+            delivery=delivery,
+            rating=rating,
+            comment=comment,
+            user=request.user
+        )
+        
+        # Update delivery partner's average rating
+        partner = delivery.delivery_partner
+        all_ratings = DeliveryRating.objects.filter(delivery__delivery_partner=partner)
+        partner.average_rating = all_ratings.aggregate(models.Avg('rating'))['rating__avg']
+        partner.save()
+        
+        return JsonResponse({'status': 'success', 'avg_rating': partner.average_rating})
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def export_unassigned_orders(request):
+    """Export unassigned orders to CSV."""
+    import csv
+    from datetime import datetime
+    
+    # Get unassigned orders
+    orders = Order.objects.filter(
+        status='confirmed',
+        delivery__isnull=True
+    ).select_related('user__profile').order_by('-created_at')
+    
+    # Create the HttpResponse object with CSV header
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="unassigned_orders_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow([
+        'Order ID',
+        'Customer Name',
+        'Customer Phone',
+        'Delivery Address',
+        'Order Date',
+        'Total Amount',
+        'Items'
+    ])
+    
+    for order in orders:
+        # Get order items as a comma-separated string
+        items = ", ".join([
+            f"{item.product.name} (x{item.quantity})"
+            for item in order.items.all()
+        ])
+        
+        writer.writerow([
+            order.id,
+            order.user.get_full_name(),
+            order.user.profile.phone_number,
+            order.delivery_address,
+            order.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            order.total_amount,
+            items
+        ])
+    
+    return response
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def select_delivery_partner(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    
+    # Check if delivery already exists for this order
+    if Delivery.objects.filter(order=order).exists():
+        messages.warning(request, "A delivery partner has already been assigned to this order.")
+        return redirect('order_detail', order_id=order.id)
+    
+    # Get available delivery partners
+    available_partners = DeliveryPartner.objects.filter(
+        status='approved',
+        is_available=True
+    ).annotate(
+        total_deliveries=Count('deliveries')
+    ).exclude(
+        deliveries__status__in=['pending', 'in_transit'],
+        deliveries__order__status__in=['processing', 'confirmed']
+    )
+    
+    context = {
+        'order': order,
+        'available_partners': available_partners
+    }
+    return render(request, 'select_delivery_partner.html', context)
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def assign_delivery_partner(request, order_id, partner_id):
+    try:
+        order = Order.objects.get(id=order_id)
+        delivery_partner = DeliveryPartner.objects.get(id=partner_id)
+        
+        # Create delivery
+        delivery = Delivery.objects.create(
+                order=order,
+            delivery_partner=delivery_partner,
+                status='pending',
+            expected_delivery_time=timezone.now() + timezone.timedelta(days=3)
+            )
+            
+        # Create delivery status history entry
+        DeliveryStatusHistory.objects.create(
+                delivery=delivery,
+                status='pending',
+            notes='Delivery partner assigned'
+        )
+        
+        # Create notification for delivery partner
+        Notification.objects.create(
+            user=delivery_partner.user,
+                title='New Delivery Assignment',
+            message=f'You have been assigned to deliver order #{order.id}.',
+            notification_type='delivery_assignment'
+            )
+            
+        # Create notification for customer
+        Notification.objects.create(
+                user=order.user,
+                title='Delivery Partner Assigned',
+            message=f'Your order #{order.id} has been assigned to a delivery partner.',
+            notification_type='order_update'
+        )
+        
+        messages.success(request, f'Delivery partner assigned successfully to order #{order.id}')
+        return redirect('unassigned_orders')  # Changed from order_history to unassigned_orders
+        
+    except Order.DoesNotExist:
+        messages.error(request, "Order not found.")
+        return redirect('unassigned_orders')
+    except DeliveryPartner.DoesNotExist:
+        messages.error(request, "Delivery partner not found.")
+        return redirect('unassigned_orders')
+    except Exception as e:
+        messages.error(request, f"An error occurred: {str(e)}")
+        return redirect('unassigned_orders')
+
+@login_required
+def cart(request):
+    """View to display user's shopping cart."""
+    print(f"Accessing cart for user: {request.user.username}")  # Debug log
+    
+    # Get or create cart for the user
+    cart_obj, created = Cart.objects.get_or_create(user=request.user)
+    print(f"Cart {'created' if created else 'retrieved'} with ID: {cart_obj.id}")  # Debug log
+    
+    # Get cart items with related product data
+    cart_items = CartItem.objects.filter(cart=cart_obj).select_related('product')
+    print(f"Found {cart_items.count()} items in cart")  # Debug log
+    
+    # Log each cart item for debugging
+    for item in cart_items:
+        print(f"Cart item - Product: {item.product.name}, Quantity: {item.quantity}")  # Debug log
+    
+    # Calculate total price
+    total_price = sum(item.quantity * item.product.price for item in cart_items)
+    print(f"Total price: {total_price}")  # Debug log
+    
+    context = {
+        'cart_items': cart_items,
+        'total_price': total_price,
+        'page_title': 'Shopping Cart',
+        'stripe_public_key': settings.STRIPE_PUBLISHABLE_KEY
+    }
+    return render(request, 'cart.html', context)
+
+@login_required
+@require_POST
+def add_to_cart(request):
+    """Add a product to the cart."""
+    try:
+        product_id = request.POST.get('product_id')
+        if not product_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Product ID is required'
+            }, status=400)
+
+        try:
+            quantity = int(request.POST.get('quantity', 1))
+            if quantity < 1:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Quantity must be at least 1'
+                }, status=400)
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid quantity value'
+            }, status=400)
+        
+        print(f"Adding to cart - Product ID: {product_id}, Quantity: {quantity}")  # Debug log
+        
+        with transaction.atomic():
+            product = Product.objects.get(id=product_id)
+            print(f"Found product: {product.name} (ID: {product.id})")  # Debug log
+            
+            cart, created = Cart.objects.get_or_create(user=request.user)
+            print(f"Cart {'created' if created else 'retrieved'} for user: {request.user.username}")  # Debug log
+        
+            cart_item, created = CartItem.objects.get_or_create(
+                cart=cart,
+                product=product,
+                defaults={'quantity': quantity}
+            )
+        
+            if not created:
+                cart_item.quantity += quantity
+                cart_item.save()
+            
+                # Verify cart item was created/updated
+                cart_item.refresh_from_db()  # Refresh from database to ensure we have the latest data
+                print(f"Cart item {'created' if created else 'updated'} - Quantity: {cart_item.quantity}")  # Debug log
+            
+            # Double check cart items - Moved outside the if block
+            cart_items = CartItem.objects.filter(cart=cart)
+            print(f"Total items in cart: {cart_items.count()}")  # Debug log
+            
+            # Calculate total items and price for response - Moved outside the if block
+            total_items = cart_items.count()
+            total_price = sum(item.quantity * item.product.price for item in cart_items)
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Product added to cart successfully',
+                'cart_count': total_items,
+                'cart_total': float(total_price),
+                'item_quantity': cart_item.quantity
+            })
+    except Product.DoesNotExist:
+        print(f"Product with ID {product_id} not found")  # Debug log
         return JsonResponse({
             'success': False,
+            'message': 'Product not found'
+        }, status=404)
+    except Exception as e:
+        print(f"Error adding to cart: {str(e)}")  # Debug log
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while adding to cart'
+        }, status=400)
+
+@login_required
+@require_POST
+def remove_from_cart(request):
+    """Remove an item from the cart."""
+    cart_item_id = request.POST.get('cart_item_id')
+    
+    try:
+        cart_item = CartItem.objects.get(id=cart_item_id, cart__user=request.user)
+        cart_item.delete()
+        return JsonResponse({
+            'success': True,
+            'message': 'Item removed from cart'
+        })
+    except CartItem.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Cart item not found'
+        }, status=404)
+
+@login_required
+@require_POST
+def update_cart_quantity(request):
+    """Update quantity of an item in the cart."""
+    cart_item_id = request.POST.get('cart_item_id')
+    quantity = int(request.POST.get('quantity', 1))
+    
+    try:
+        cart_item = CartItem.objects.get(id=cart_item_id, cart__user=request.user)
+        cart_item.quantity = quantity
+        cart_item.save()
+        return JsonResponse({
+            'success': True,
+            'message': 'Cart updated successfully'
+        })
+    except CartItem.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Cart item not found'
+        }, status=404)
+
+@login_required
+def wishlist(request):
+    """View to display user's wishlist."""
+    wishlist_obj, created = Wishlist.objects.get_or_create(user=request.user)
+    products = wishlist_obj.products.all()
+    
+    context = {
+        'wishlist_items': products,
+        'page_title': 'My Wishlist'
+    }
+    return render(request, 'wishlist.html', context)
+
+@login_required
+@require_POST
+def add_to_wishlist(request):
+    """Add a product to the wishlist."""
+    try:
+        product_id = request.POST.get('product_id')
+        if not product_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Product ID is required'
+            }, status=400)
+    
+        print(f"Adding to wishlist - Product ID: {product_id}")  # Debug log
+        
+        product = Product.objects.get(id=product_id)
+        print(f"Found product: {product.name} (ID: {product.id})")  # Debug log
+        
+        wishlist, created = Wishlist.objects.get_or_create(user=request.user)
+        print(f"Wishlist {'created' if created else 'retrieved'} for user: {request.user.username}")  # Debug log
+        
+        if product in wishlist.products.all():
+            return JsonResponse({
+                'success': True,
+                'message': 'Product is already in your wishlist'
+            })
+            
+        wishlist.products.add(product)
+        print(f"Product added to wishlist successfully")  # Debug log
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Product added to wishlist successfully'
+        })
+    except Product.DoesNotExist:
+        print(f"Product with ID {product_id} not found")  # Debug log
+        return JsonResponse({
+            'success': False,
+            'message': 'Product not found'
+        }, status=404)
+    except ValueError as e:
+        print(f"Invalid product ID format: {str(e)}")  # Debug log
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid product ID format'
+        }, status=400)
+    except Exception as e:
+        print(f"Error adding to wishlist: {str(e)}")  # Debug log
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while adding to wishlist'
+        }, status=400)
+
+@login_required
+@require_POST
+def remove_from_wishlist(request):
+    """Remove a product from the wishlist."""
+    product_id = request.POST.get('product_id')
+    
+    try:
+        wishlist = Wishlist.objects.get(user=request.user)
+        product = Product.objects.get(id=product_id)
+        wishlist.products.remove(product)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Product removed from wishlist'
+        })
+    except (Wishlist.DoesNotExist, Product.DoesNotExist):
+        return JsonResponse({
+            'success': False,
+            'message': 'Wishlist or product not found'
+        }, status=404)
+
+@login_required
+def single_product_checkout(request, product_id):
+    """Handle checkout for a single product with Stripe integration."""
+    try:
+        product = get_object_or_404(Product, id=product_id)
+        
+        if request.method == 'POST':
+            quantity = int(request.POST.get('quantity', 1))
+            
+            # Create Stripe checkout session
+            stripe.api_key = settings.STRIPE_SECRET_KEY
+            
+            # Calculate price in cents (Stripe requires amounts in smallest currency unit)
+            unit_amount = int(product.price * 100)  # Convert to cents
+            
+            checkout_session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                line_items=[{
+                    'price_data': {
+                        'currency': 'inr',
+                        'unit_amount': unit_amount,
+                        'product_data': {
+                            'name': product.name,
+                            'description': product.description[:255] if product.description else None,
+                            'images': [request.build_absolute_uri(product.images.first().image.url)] if product.images.exists() else [],
+                        },
+                    },
+                    'quantity': quantity,
+                }],
+                mode='payment',
+                success_url=request.build_absolute_uri(reverse('payment_success')) + '?session_id={CHECKOUT_SESSION_ID}',
+                cancel_url=request.build_absolute_uri(reverse('payment_cancel')),
+                metadata={
+                    'product_id': product_id,
+                    'quantity': quantity,
+                    'user_id': request.user.id
+                }
+            )
+            
+            # Create a pending order
+            order = Order.objects.create(
+                user=request.user,
+                total_price=product.price * quantity,  # Changed from total_amount to total_price
+                status='processing'  # Changed from 'pending' to 'processing' to match STATUS_CHOICES
+            )
+            
+            # Create order item
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                quantity=quantity,
+                price=product.price
+            )
+            
+            return JsonResponse({
+                'session_id': checkout_session.id
+            })
+            
+        context = {
+            'product': product,
+            'stripe_public_key': settings.STRIPE_PUBLISHABLE_KEY,
+            'page_title': 'Quick Checkout'
+        }
+        return render(request, 'single_product_checkout.html', context)
+        
+    except Exception as e:
+        return JsonResponse({
             'error': str(e)
+        }, status=400)
+
+@login_required
+def get_cart(request):
+    """AJAX endpoint to get cart data."""
+    try:
+        cart = Cart.objects.get(user=request.user)
+        cart_items = CartItem.objects.filter(cart=cart).select_related('product')
+        
+        items_data = []
+        total_price = 0
+        
+        for item in cart_items:
+            # Get the first image if any exists
+            image_url = ''
+            if hasattr(item.product, 'images'):
+                first_image = item.product.images.first()
+                if first_image and hasattr(first_image, 'image'):
+                    image_url = first_image.image.url
+            
+            item_price = float(item.product.price)
+            item_total = item_price * item.quantity
+            total_price += item_total
+            
+            items_data.append({
+                'id': item.id,
+                'product_id': item.product.id,
+                'name': item.product.name,
+                'price': item_price,
+                'quantity': item.quantity,
+                'total': item_total,
+                'image_url': image_url,
+                'description': item.product.description[:100] if item.product.description else ''
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'cart_items': items_data,
+            'total_items': len(items_data),
+            'total_price': total_price
+        })
+        
+    except Cart.DoesNotExist:
+        return JsonResponse({
+            'success': True,
+            'cart_items': [],
+            'total_items': 0,
+            'total_price': 0
+        })
+    except Exception as e:
+        print(f"Error fetching cart: {str(e)}")  # Debug log
+        return JsonResponse({
+            'success': False,
+            'message': 'Error fetching cart data'
         }, status=500)
+
+# Add this function to reset partner status if stuck
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def reset_delivery_partner_status(request, partner_id):
+    """Reset a delivery partner's availability status"""
+    partner = get_object_or_404(DeliveryPartner, id=partner_id)
+    
+    # Check if partner has any active deliveries
+    active_deliveries = Delivery.objects.filter(
+        delivery_partner=partner,
+        status__in=['pending', 'picked_up', 'in_transit', 'out_for_delivery']
+    )
+    
+    if active_deliveries.exists():
+        messages.error(request, f"Cannot reset status. Partner has {active_deliveries.count()} active deliveries.")
+    else:
+        partner.is_available = True
+        partner.save()
+        messages.success(request, f"Delivery partner {partner.user.get_full_name()} status reset to available.")
+    
+    return redirect('admin_delivery_partners')
+
+@login_required
+@require_POST
+def dashboard_update_status(request, delivery_id):
+    try:
+        # Get the delivery object
+        delivery = get_object_or_404(Delivery, id=delivery_id)
+        
+        # Modified permission check - debug information
+        print(f"User: {request.user.username}, Delivery Partner: {delivery.delivery_partner}")
+        
+        # For now, allow any authenticated user to update the status for testing
+        # We'll refine the permissions later after debugging
+        
+        # Parse request data
+        data = json.loads(request.body)
+        new_status = data.get('status', '').lower()
+        notes = data.get('notes', '')
+
+        # Validate status
+        valid_statuses = ['pending', 'in_transit', 'delivered', 'failed', 'cancelled']
+        if new_status not in valid_statuses:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
+            }, status=400)
+
+        # Store old status for notification
+        old_status = delivery.status
+
+        # Update delivery status
+        delivery.status = new_status
+        delivery.save()
+
+        # Create status history entry - only use fields that exist in the model
+        DeliveryStatusHistory.objects.create(
+            delivery=delivery,
+            status=new_status,
+            notes=notes
+        )
+
+        # Create notification for status change
+        if old_status != new_status:
+            notification_message = f'Delivery #{delivery.id} status changed from {old_status} to {new_status}'
+            if notes:
+                notification_message += f'. Notes: {notes}'
+            
+            # Notify customer
+            try:
+                Notification.objects.create(
+                    user=delivery.order.user,
+                    message=notification_message,
+                    notification_type='delivery_update'
+                )
+            except:
+                # In case of any issue with notification, don't let it block the status update
+                print(f"Failed to create notification for delivery {delivery.id}")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Delivery status updated successfully'
+        })
+
+    except Delivery.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        print(f"Error in dashboard_update_status: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+def simple_update_status(request, delivery_id):
+    delivery = get_object_or_404(Delivery, id=delivery_id)
+    
+    if request.method == 'POST':
+        new_status = request.POST.get('status', '').lower()
+        notes = request.POST.get('notes', '')
+        
+        # Validate status
+        valid_statuses = ['pending', 'in_transit', 'delivered', 'failed', 'cancelled']
+        if new_status not in valid_statuses:
+            messages.error(request, f'Invalid status. Must be one of: {", ".join(valid_statuses)}')
+            return redirect('delivery_tracking', delivery_id=delivery_id)
+        
+        # Update delivery status
+        old_status = delivery.status
+        delivery.status = new_status
+        delivery.save()
+        
+        # Create history entry
+        DeliveryStatusHistory.objects.create(
+            delivery=delivery,
+            status=new_status,
+            notes=notes
+        )
+        
+        # Create notification
+        if old_status != new_status:
+            notification_message = f'Delivery #{delivery.id} status changed from {old_status} to {new_status}'
+            if notes:
+                notification_message += f'. Notes: {notes}'
+            
+            # Notify customer
+            try:
+                Notification.objects.create(
+                    user=delivery.order.user,
+                    message=notification_message,
+                    notification_type='delivery_update'
+                )
+            except Exception as e:
+                print(f"Failed to create notification: {str(e)}")
+        
+        messages.success(request, 'Delivery status updated successfully')
+        return redirect('delivery_tracking', delivery_id=delivery_id)
+    
+    return redirect('delivery_tracking', delivery_id=delivery_id)
+
+@login_required
+def view_delivery_tracking(request, delivery_id):
+    """Unrestricted view for tracking deliveries"""
+    # Get the delivery
+    delivery = get_object_or_404(Delivery, id=delivery_id)
+    
+    if request.method == 'POST':
+        # Process status updates
+        new_status = request.POST.get('status', '').lower()
+        notes = request.POST.get('notes', '')
+        
+        # Validate status
+        valid_statuses = ['pending', 'in_transit', 'delivered', 'failed', 'cancelled']
+        if new_status not in valid_statuses:
+            messages.error(request, f'Invalid status. Must be one of: {", ".join(valid_statuses)}')
+            return redirect('view_delivery_tracking', delivery_id=delivery_id)
+        
+        # Update delivery status
+        old_status = delivery.status
+        delivery.status = new_status
+        delivery.save()
+        
+        # Create history entry
+        DeliveryStatusHistory.objects.create(
+            delivery=delivery,
+            status=new_status,
+            notes=notes
+        )
+        
+        # Create notification
+        if old_status != new_status:
+            notification_message = f'Delivery #{delivery.id} status changed from {old_status} to {new_status}'
+            if notes:
+                notification_message += f'. Notes: {notes}'
+            
+            # Notify customer
+            try:
+                Notification.objects.create(
+                    user=delivery.order.user,
+                    message=notification_message,
+                    notification_type='delivery_update'
+                )
+            except Exception as e:
+                print(f"Failed to create notification: {str(e)}")
+        
+        messages.success(request, 'Delivery status updated successfully')
+    
+    # Get status history
+    try:
+        status_history = delivery.status_history.all().order_by('-created_at')
+    except:
+        status_history = []
+    
+    context = {
+        'delivery': delivery,
+        'status_history': status_history,
+    }
+    
+    return render(request, 'delivery_tracking.html', context)
+
+@login_required
+def view_order_details(request, order_id):
+    """New view function for viewing order details without duplicate decorators"""
+    try:
+        # Try to get the order
+        order = get_object_or_404(Order, id=order_id)
+        
+        # Check if user has permission to view this order
+        if not (request.user == order.user or request.user.is_staff or 
+                (hasattr(order, 'items') and order.items.filter(product__artisan__user=request.user).exists())):
+            messages.error(request, "You don't have permission to view this order.")
+            return redirect('order_history')
+        
+        # Get order items and related data
+        order_items = order.items.all().prefetch_related('product', 'reviews')
+        
+        # Get delivery information if exists
+        delivery = None
+        delivery_status_history = None
+        delivery_rating = None
+        try:
+            delivery = order.delivery
+            if delivery:
+                delivery_status_history = delivery.status_history.all().order_by('-timestamp')
+                delivery_rating = delivery.ratings.filter(user=request.user).first()
+        except:
+            pass  # No delivery associated with this order
+        
+        # Calculate status progress
+        status_map = {
+            'processing': 25,
+            'shipped': 75,
+            'delivered': 100,
+            'cancelled': 0
+        }
+        status_progress = status_map.get(order.status.lower(), 0)
+    
+        context = {
+            'order': order,
+            'order_items': order_items,
+            'delivery': delivery,
+            'delivery_status_history': delivery_status_history,
+            'delivery_rating': delivery_rating,
+            'status_progress': status_progress
+        }
+        
+        return render(request, 'order_detail.html', context)
+        
+    except Order.DoesNotExist:
+        messages.error(request, "Order not found.")
+        return redirect('order_history')
+    except Exception as e:
+        messages.error(request, f"An error occurred: {str(e)}")
+        return redirect('order_history')
+
+@login_required
+@require_POST
+def rate_delivery_form(request, delivery_id):
+    """
+    View for handling delivery rating form submission
+    """
+    try:
+        # Get the delivery
+        delivery = Delivery.objects.get(id=delivery_id)
+        
+        # Check if this user is authorized to rate this delivery
+        if request.user != delivery.order.user:
+            messages.error(request, "You can only rate deliveries for your own orders.")
+            return redirect('order_history')
+        
+        # Check if the delivery is completed
+        if delivery.status.lower() != 'delivered':
+            messages.error(request, "You can only rate completed deliveries.")
+            return redirect('order_history')
+            
+        if request.method == 'POST':
+            rating = request.POST.get('rating')
+            comment = request.POST.get('comment', '')
+            
+            # Validate rating
+            try:
+                rating = int(rating)
+                if rating < 1 or rating > 5:
+                    raise ValueError("Rating must be between 1 and 5")
+            except (ValueError, TypeError):
+                messages.error(request, "Please provide a valid rating between 1 and 5.")
+                return redirect('order_history')
+                
+            # Create or update rating - this will automatically update the partner's rating through the save method
+            delivery_rating, created = DeliveryRating.objects.update_or_create(
+                delivery=delivery,
+                user=request.user,
+                defaults={
+                    'rating': rating,
+                    'comment': comment
+                }
+            )
+            
+            # Create notification for delivery partner
+            Notification.objects.create(
+                user=delivery.delivery_partner.user,
+                title='New Delivery Rating',
+                message=f'Your delivery for Order #{delivery.order.id} has been rated {rating}/5 stars.',
+                notification_type='system',
+                reference_id=delivery.id
+            )
+            
+            messages.success(request, "Thank you for rating your delivery experience!")
+            return redirect('order_history')
+        else:
+            # This is a GET request, redirect to order history
+            return redirect('order_history')
+            
+    except Delivery.DoesNotExist:
+        messages.error(request, "Delivery not found.")
+        return redirect('order_history')
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def unassigned_orders(request):
+    """
+    View function for displaying all unassigned orders (with no delivery assigned)
+    Only accessible by staff users
+    """
+    # Get all orders with status 'processing' that don't have a delivery assigned
+    unassigned_orders = Order.objects.filter(
+        status__iexact='processing'
+    ).exclude(
+        id__in=Delivery.objects.values_list('order_id', flat=True)
+    ).order_by('-created_at')
+    
+    context = {
+        'unassigned_orders': unassigned_orders,
+        'total_unassigned': unassigned_orders.count()
+    }
+    
+    return render(request, 'unassigned_orders.html', context)
+
+@login_required
+def notifications(request):
+    """View function to display all notifications for the current user."""
+    notifications = Notification.objects.filter(user=request.user).order_by('-created_at')
+    
+    context = {
+        'notifications': notifications,
+        'unread_count': notifications.filter(is_read=False).count()
+    }
+    
+    return render(request, 'notifications.html', context)
+
+@login_required
+def unread_notifications_count(request):
+    """API endpoint to get the number of unread notifications."""
+    count = Notification.objects.filter(user=request.user, is_read=False).count()
+    return JsonResponse({'count': count})
+
+@login_required
+def mark_notification_read(request, notification_id):
+    """Mark a specific notification as read."""
+    try:
+        notification = Notification.objects.get(id=notification_id, user=request.user)
+        notification.is_read = True
+        notification.save()
+        return JsonResponse({'success': True})
+    except Notification.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Notification not found'}, status=404)
+
+@login_required
+def mark_all_notifications_read(request):
+    """Mark all notifications for the current user as read."""
+    Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+    return JsonResponse({'success': True})
+
+@login_required
+def rate_delivery_form(request, delivery_id):
+    """
+    View to handle rating submissions for delivery partners.
+    Allows customers to rate their delivery experience.
+    """
+    try:
+        delivery = Delivery.objects.get(id=delivery_id)
+        
+        # Check if the user owns the order
+        if delivery.order.user != request.user:
+            messages.error(request, "You are not authorized to rate this delivery.")
+            return redirect('order_history')
+        
+        # Check if delivery is completed
+        if delivery.status.lower() not in ['delivered', 'complete', 'completed']:
+            messages.warning(request, "You can only rate completed deliveries.")
+            return redirect('order_history')
+            
+        if request.method == 'POST':
+            rating = request.POST.get('rating')
+            comment = request.POST.get('comment', '')
+            
+            # Validate rating
+            try:
+                rating = int(rating)
+                if rating < 1 or rating > 5:
+                    raise ValueError("Rating must be between 1 and 5")
+            except (ValueError, TypeError):
+                messages.error(request, "Please provide a valid rating between 1 and 5.")
+                return redirect('order_history')
+                
+            # Create or update rating - this will automatically update the partner's rating through the save method
+            delivery_rating, created = DeliveryRating.objects.update_or_create(
+                delivery=delivery,
+                user=request.user,
+                defaults={
+                    'rating': rating,
+                    'comment': comment
+                }
+            )
+            
+            # Create notification for delivery partner
+            Notification.objects.create(
+                user=delivery.delivery_partner.user,
+                title='New Delivery Rating',
+                message=f'Your delivery for Order #{delivery.order.id} has been rated {rating}/5 stars.',
+                notification_type='delivery_update',
+                reference_id=delivery.id
+            )
+            
+            messages.success(request, "Thank you for rating your delivery experience!")
+            return redirect('order_history')
+        else:
+            # This is a GET request, redirect to order history
+            return redirect('order_history')
+            
+    except Delivery.DoesNotExist:
+        messages.error(request, "Delivery not found.")
+        return redirect('order_history')
+    except Exception as e:
+        messages.error(request, f"An error occurred: {str(e)}")
+        return redirect('order_history')
+
+@login_required
+def delivery_ratings(request):
+    """
+    View for delivery partners to see their ratings from customers.
+    Displays rating statistics and individual ratings with comments.
+    """
+    # Check if user is a delivery partner
+    if not hasattr(request.user, 'delivery_partner'):
+        messages.error(request, "You are not authorized to view this page.")
+        return redirect('home')
+        
+    try:
+        delivery_partner = request.user.delivery_partner
+        
+        # Get all ratings for deliveries made by this partner
+        all_ratings = DeliveryRating.objects.filter(
+            delivery__delivery_partner=delivery_partner
+        ).select_related('delivery__order', 'user').order_by('-created_at')
+        
+        # Calculate average rating
+        total_ratings = all_ratings.count()
+        if total_ratings > 0:
+            avg_rating = all_ratings.aggregate(avg=models.Avg('rating'))['avg']
+            avg_rating_whole = int(avg_rating)
+            avg_rating_half = avg_rating_whole + 0.5 if avg_rating - avg_rating_whole >= 0.3 else avg_rating_whole
+        else:
+            avg_rating = 0
+            avg_rating_whole = 0
+            avg_rating_half = 0
+            
+        # Calculate rating distribution
+        rating_distribution = []
+        for i in range(5, 0, -1):
+            count = all_ratings.filter(rating=i).count()
+            percentage = (count / total_ratings * 100) if total_ratings > 0 else 0
+            rating_distribution.append({
+                'rating': i,
+                'count': count,
+                'percentage': percentage
+            })
+            
+        # Paginate the ratings
+        paginator = Paginator(all_ratings, 10)  # 10 ratings per page
+        page = request.GET.get('page', 1)
+        
+        try:
+            ratings = paginator.page(page)
+        except PageNotAnInteger:
+            ratings = paginator.page(1)
+        except EmptyPage:
+            ratings = paginator.page(paginator.num_pages)
+            
+        context = {
+            'ratings': ratings,
+            'average_rating': avg_rating,
+            'average_rating_whole': avg_rating_whole,
+            'average_rating_half': avg_rating_half,
+            'total_ratings': total_ratings,
+            'rating_distribution': rating_distribution,
+            'page_title': 'My Delivery Ratings'
+        }
+        
+        return render(request, 'delivery_ratings.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"An error occurred: {str(e)}")
+        return redirect('delivery_dashboard')

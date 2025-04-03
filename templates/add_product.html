@@ -141,7 +141,8 @@
                     if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
                         xhr.setRequestHeader("X-CSRFToken", csrftoken);
                     }
-                }
+                },
+                timeout: 30000 // 30 second timeout for all AJAX requests
             });
 
             sessionStorage.setItem('currentPage', 'add_product');
@@ -247,10 +248,18 @@
                 return this.optional(element) || /^image\//i.test(element.files[0].type);
             }, "Please select a valid image file.");
 
+            // Timer for image classification timeout
+            var classificationTimer;
+
             // Image preview and classification
             $('#product_images').change(function() {
                 var file = this.files[0];
                 if (file) {
+                    // Clear any existing timeout
+                    if (classificationTimer) {
+                        clearTimeout(classificationTimer);
+                    }
+
                     // Show loading state
                     $('#recognized_category')
                         .html('<div class="loading">Analyzing image... <i class="fas fa-spinner fa-spin"></i></div>')
@@ -262,25 +271,56 @@
                     }
                     reader.readAsDataURL(file);
 
+                    // Prepare form data
                     var formData = new FormData();
                     formData.append('image', file);
                     
+                    // Set a timeout of 20 seconds
+                    classificationTimer = setTimeout(function() {
+                        // Handle timeout
+                        $('#recognized_category')
+                            .html('Image analysis is taking longer than expected. The category may still be detected, or you can select a category manually.')
+                            .removeClass('hidden');
+                    }, 20000);
+                    
+                    // Make the AJAX request
                     $.ajax({
                         url: "{% url 'classify_image' %}",
                         type: "POST",
                         data: formData,
                         processData: false,
                         contentType: false,
+                        timeout: 30000, // 30 second timeout
                         success: function(response) {
+                            // Clear the timeout
+                            clearTimeout(classificationTimer);
+                            
                             if (response.success) {
+                                // Debug: log the response and available categories
+                                console.log("Classification response:", response);
+                                console.log("Available categories:", $('#category option').map(function() { 
+                                    return { value: this.value, text: this.text }; 
+                                }).get());
+                                
                                 // Find the category option that matches the classification
                                 var categoryOption = $('#category option').filter(function() {
-                                    return $(this).text().toLowerCase() === response.classification.toLowerCase();
+                                    // Case-insensitive comparison and more flexible matching
+                                    if (this.text === response.classification) return true;
+                                    if (this.text.toLowerCase() === response.classification.toLowerCase()) return true;
+                                    // Partial matching if needed
+                                    if (this.text.toLowerCase().includes(response.classification.toLowerCase())) return true;
+                                    if (response.classification.toLowerCase().includes(this.text.toLowerCase())) return true;
+                                    return false;
                                 });
+                                
+                                console.log("Matched category option:", categoryOption.length > 0 ? categoryOption.text() : "None");
                                 
                                 // If we found a matching category, select it
                                 if (categoryOption.length > 0) {
                                     $('#category').val(categoryOption.val());
+                                    console.log("Selected category value:", categoryOption.val());
+                                } else {
+                                    console.log("No matching category found for:", response.classification);
                                 }
 
                                 // Format the recognition results
@@ -307,9 +347,18 @@
                             }
                         },
                         error: function(xhr, status, error) {
-                            $('#recognized_category')
-                                .html('Error occurred during classification: ' + error)
-                                .removeClass('hidden');
+                            // Clear the timeout
+                            clearTimeout(classificationTimer);
+                            
+                            if (status === 'timeout') {
+                                $('#recognized_category')
+                                    .html('Classification timed out. Please select a category manually or try a different image.')
+                                    .removeClass('hidden');
+                            } else {
+                                $('#recognized_category')
+                                    .html('Error occurred during classification: ' + error)
+                                    .removeClass('hidden');
+                            }
                         }
                     });
                 }

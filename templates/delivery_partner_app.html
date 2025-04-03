@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.css" />
+<style>
+    .status-btn {
+        width: 100%;
+        margin-bottom: 10px;
+        padding: 15px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 500;
+    }
+    
+    .status-btn.active {
+        background-color: #3182ce;
+        color: white;
+    }
+    
+    .location-status {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 10px;
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        text-align: center;
+        z-index: 1000;
+    }
+    
+    .delivery-info {
+        padding: 15px;
+        background: #2d3748;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .delivery-info h4 {
+        margin: 0;
+        color: #e2e8f0;
+    }
+    
+    .delivery-info p {
+        margin: 5px 0;
+        color: #a0aec0;
+    }
+    
+    #map {
+        height: 300px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .status-form {
+        background: #2d3748;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .status-form textarea {
+        width: 100%;
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 4px;
+        background: #1a202c;
+        border: 1px solid #4a5568;
+        color: #e2e8f0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="location-status" id="locationStatus">
+        Tracking location...
+    </div>
+    
+    <div class="delivery-info">
+        <h4>Delivery #{{ delivery.id }}</h4>
+        <p>{{ delivery.delivery_address }}</p>
+        <p>Customer: {{ delivery.order.user.get_full_name }}</p>
+        <p>Expected by: {{ delivery.expected_delivery_time|date:"g:i A" }}</p>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="status-form">
+        <h5 class="mb-3">Update Status</h5>
+        <div class="status-buttons">
+            {% for status, label in status_choices %}
+            <button 
+                class="status-btn {% if delivery.status == status %}active{% endif %}" 
+                data-status="{{ status }}"
+                onclick="updateStatus('{{ status }}')"
+            >
+                {{ label }}
+            </button>
+            {% endfor %}
+        </div>
+        
+        <textarea 
+            id="statusNotes" 
+            placeholder="Add notes about the delivery status..."
+            rows="3"
+        ></textarea>
+        
+        <button 
+            class="btn btn-primary w-100" 
+            onclick="submitStatusUpdate()"
+        >
+            Update Status
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/leaflet.js"></script>
+<script src="{% static 'js/delivery_partner.js' %}"></script>
+<script>
+    let deliveryApp;
+    let currentStatus = '{{ delivery.status }}';
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        deliveryApp = new DeliveryPartnerApp('{{ delivery.id }}');
+        
+        // Initialize map
+        const map = L.map('map').setView([0, 0], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        // Set initial location if available
+        {% if delivery.delivery_partner.current_location_lat %}
+        const initialLocation = [
+            {{ delivery.delivery_partner.current_location_lat }},
+            {{ delivery.delivery_partner.current_location_lng }}
+        ];
+        map.setView(initialLocation, 13);
+        L.marker(initialLocation).addTo(map);
+        {% endif %}
+    });
+    
+    function updateStatus(status) {
+        currentStatus = status;
+        document.querySelectorAll('.status-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.status === status) {
+                btn.classList.add('active');
+            }
+        });
+    }
+    
+    async function submitStatusUpdate() {
+        const notes = document.getElementById('statusNotes').value;
+        try {
+            await deliveryApp.updateDeliveryStatus(
+                currentStatus,
+                notes,
+                '{{ delivery.delivery_address }}'
+            );
+            document.getElementById('statusNotes').value = '';
+            showNotification('Status updated successfully');
+        } catch (error) {
+            showNotification('Failed to update status', true);
+        }
+    }
+    
+    function showNotification(message, isError = false) {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${isError ? 'danger' : 'success'} alert-dismissible fade show`;
+        notification.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.querySelector('.container').insertBefore(notification, document.querySelector('.delivery-info'));
+        setTimeout(() => notification.remove(), 5000);
+    }
+    
+    // Clean up when leaving the page
+    window.addEventListener('beforeunload', function() {
+        if (deliveryApp) {
+            deliveryApp.disconnect();
+        }
+    });
+</script>
+{% endblock %}

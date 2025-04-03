@@ -151,31 +151,23 @@
         class NotificationManager {
             constructor() {
                 this.lastCheck = 0;
-                this.minCheckInterval = 5000; // Minimum 5 seconds between checks
-                this.backgroundInterval = 120000; // Check every 2 minutes in background
+                this.minCheckInterval = 60000; // Minimum 1 minute between checks (increased from 5 seconds)
+                this.backgroundInterval = 600000; // Check every 10 minutes (increased from 2 minutes)
                 this.isVisible = true;
                 this.backgroundTimer = null;
-                this.setupEventListeners();
-                this.startBackgroundCheck();
+                
+                // Only setup essential events, no background polling
+                this.setupMinimalEventListeners();
             }
 
-            setupEventListeners() {
-                // Check when window gains focus
-                document.addEventListener('visibilitychange', () => {
-                    this.isVisible = !document.hidden;
-                    if (this.isVisible) {
-                        this.checkNotifications();
-                    }
-                });
-
-                // Check on user interaction (throttled)
-                document.addEventListener('click', () => this.throttledCheck());
-                document.addEventListener('keydown', () => this.throttledCheck());
-
-                // Check when notification dropdown is opened
+            setupMinimalEventListeners() {
+                // Only check when notification dropdown is opened
                 document.getElementById('notificationDropdown')?.addEventListener('show.bs.dropdown', () => {
                     this.checkNotifications();
                 });
+                
+                // Optional: Check once when page loads
+                this.checkNotifications();
             }
 
             async checkNotifications() {
@@ -194,11 +186,6 @@
                 }
             }
 
-            throttledCheck() {
-                if (!this.isVisible) return;
-                this.checkNotifications();
-            }
-
             updateNotificationBadge(count) {
                 const badge = document.querySelector('.notification-count');
                 if (badge) {
@@ -209,20 +196,6 @@
                         badge.classList.add('hidden');
                     }
                 }
-            }
-
-            startBackgroundCheck() {
-                // Clear existing timer if any
-                if (this.backgroundTimer) {
-                    clearInterval(this.backgroundTimer);
-                }
-
-                // Start new background check
-                this.backgroundTimer = setInterval(() => {
-                    if (this.isVisible) {
-                        this.checkNotifications();
-                    }
-                }, this.backgroundInterval);
             }
 
             async markAllAsRead() {
@@ -263,8 +236,8 @@
             }
         }
 
-        // Initialize notification manager when document is ready
-        document.addEventListener('DOMContentLoaded', () => {
+        // Initialize notification manager when page is ready
+        document.addEventListener('DOMContentLoaded', function() {
             window.notificationManager = new NotificationManager();
         });
     </script>

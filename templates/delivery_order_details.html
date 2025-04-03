@@ -1,390 +1,774 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Order Details - Craftsy</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Order Details - Craftsy</title>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     
     <style>
+        :root {
+            --primary-color: #3a86ff;
+            --secondary-color: #8338ec;
+            --success-color: #06d6a0;
+            --warning-color: #ffbe0b;
+            --danger-color: #ef476f;
+            --dark-bg: #121212;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --hover-bg: rgba(255, 255, 255, 0.1);
+            --text-color: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --border-radius: 12px;
+            --transition-speed: 0.3s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            background-color: #121212;
-            color: #e0e0e0;
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            font-family: 'Poppins', sans-serif;
+            min-height: 100vh;
         }
-        /* Navbar Styles */
-        .navbar {
-            background-color: rgba(0, 0, 0, 0.9);
+
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: rgba(0, 0, 0, 0.9);
             backdrop-filter: blur(10px);
+            padding: 1.5rem 1rem;
             position: fixed;
-            top: 0;
-            right: 0;
-            left: 0;
-            z-index: 1030;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: all var(--transition-speed);
         }
-        .navbar-brand {
-            font-size: 1.25rem;
-            color: #fff;
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding: 0 0.5rem;
+        }
+
+        .sidebar-logo i {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-right: 1rem;
+        }
+
+        .sidebar-logo h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .sidebar-menu {
+            margin-bottom: 2rem;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all var(--transition-speed);
+            color: var(--text-color);
             text-decoration: none;
-            transition: color 0.3s;
         }
-        .navbar-brand:hover {
-            color: #007bff;
+
+        .menu-item i {
+            font-size: 1.25rem;
+            margin-right: 1rem;
+            transition: all var(--transition-speed);
         }
-        .nav-link {
-            color: rgba(255, 255, 255, 0.85);
-            transition: all 0.3s;
-            padding: 0.5rem 1rem;
-            border-radius: 0.25rem;
+
+        .menu-item:hover {
+            background: var(--hover-bg);
         }
-        .nav-link:hover {
-            color: #fff;
-            background: rgba(255, 255, 255, 0.1);
+
+        .menu-item.active {
+            background: var(--primary-color);
+            color: white;
         }
-        .nav-link.active {
-            color: #fff;
-            background: rgba(0, 123, 255, 0.2);
+
+        .menu-item.active i {
+            color: white;
         }
-        .main-content {
-            margin-top: 70px;
-            padding: 20px 0;
+
+        .menu-item.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
+
+        .content-area {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-right: 1.5rem;
+        }
+
+        .user-info i {
+            font-size: 1.5rem;
+            margin-right: 0.5rem;
+        }
+
         .card {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header h2 {
+            color: white;
+            font-size: 1.25rem;
+            margin: 0;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .btn-action {
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
             border: none;
-            border-radius: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all var(--transition-speed);
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
-        .status-badge {
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-size: 0.9em;
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
         }
-        .status-pending { background-color: #ffc107; color: #000; }
-        .status-in-transit { background-color: #17a2b8; color: #fff; }
-        .status-delivered { background-color: #28a745; color: #fff; }
+
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
         
-        .timeline {
-            position: relative;
-            padding: 20px 0;
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
         }
-        .timeline::before {
-            content: '';
-            position: absolute;
-            width: 2px;
-            background: rgba(255, 255, 255, 0.2);
-            top: 0;
-            bottom: 0;
-            left: 50%;
-            margin-left: -1px;
+
+        .btn-action i {
+            margin-right: 0.5rem;
         }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .badge-warning {
+            background-color: var(--warning-color);
+            color: black;
+        }
+
+        .badge-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .badge-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .map-container {
+            height: 300px;
+            width: 100%;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .order-info {
+            margin-bottom: 2rem;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .order-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .order-card h3 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .order-card h3 i {
+            margin-right: 0.5rem;
+        }
+
+        .order-detail {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 0.75rem;
+        }
+
+        .order-detail:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .order-detail-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .order-detail-value {
+            color: var(--text-color);
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+
+        table th, table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        table th {
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .product-img {
+            width: 50px;
+            height: 50px;
+            border-radius: var(--border-radius);
+            object-fit: cover;
+            margin-right: 1rem;
+        }
+
+        .product-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .order-summary {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            margin-top: 1.5rem;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            width: 300px;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .summary-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .summary-label {
+            color: var(--text-secondary);
+        }
+
+        .delivery-timeline {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 2rem;
+        }
+
         .timeline-item {
-            margin-bottom: 30px;
+            display: flex;
+            margin-bottom: 1.5rem;
             position: relative;
         }
-        .timeline-content {
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            position: relative;
-            width: 45%;
-            margin-left: auto;
-            margin-right: auto;
+
+        .timeline-item:last-child {
+            margin-bottom: 0;
         }
-        .timeline-content::before {
+
+        .timeline-item::before {
             content: '';
             position: absolute;
-            top: 16px;
-            width: 20px;
-            height: 20px;
-            background: #fff;
+            left: 20px;
+            top: 30px;
+            bottom: -30px;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .timeline-item:last-child::before {
+            display: none;
+        }
+
+        .timeline-icon {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            left: -60px;
+            background: var(--card-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            z-index: 1;
         }
-        .timeline-item.completed .timeline-content::before {
-            background: #28a745;
+
+        .timeline-icon i {
+            color: var(--primary-color);
         }
-        .timeline-item.active .timeline-content::before {
-            background: #007bff;
+
+        .timeline-content {
+            flex: 1;
         }
-        #map {
-            height: 400px;
-            border-radius: 15px;
+
+        .timeline-title {
+            margin-bottom: 0.25rem;
+            font-weight: 600;
         }
-        .form-control, .form-select {
-            background-color: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            color: #e0e0e0;
+
+        .timeline-date {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
         }
-        .form-control:focus, .form-select:focus {
-            background-color: #2a2a2a;
-            border-color: #007bff;
-            color: #e0e0e0;
-            box-shadow: none;
+
+        .customer-info {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
         }
-        .modal-content {
-            background-color: #1a1a1a;
-            color: #e0e0e0;
+
+        .customer-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
         }
-        .modal-header {
-            border-bottom: 1px solid #333;
+
+        .customer-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            color: var(--primary-color);
         }
-        .modal-footer {
-            border-top: 1px solid #333;
+
+        .customer-avatar i {
+            font-size: 1.5rem;
+        }
+
+        .customer-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .customer-contact {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+                position: fixed;
+                z-index: 1000;
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            
+            .content-area {
+                margin-left: 0;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'delivery_dashboard' %}">
-                <i class="fas fa-truck me-2"></i>Craftsy Delivery
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'delivery_dashboard' %}active{% endif %}" 
-                           href="{% url 'delivery_dashboard' %}">
-                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'delivery_history' %}active{% endif %}" 
-                           href="{% url 'delivery_history' %}">
-                            <i class="fas fa-history me-2"></i>History
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        {% if active_delivery %}
-                            <a class="nav-link {% if request.resolver_match.url_name == 'delivery_tracking' %}active{% endif %}" 
-                               href="{% url 'delivery_tracking' delivery_id=active_delivery.id %}">
-                                <i class="fas fa-map-marker-alt me-2"></i>Live Tracking
-                            </a>
-                        {% else %}
-                            <a class="nav-link disabled" href="#">
-                                <i class="fas fa-map-marker-alt me-2"></i>Live Tracking
-                            </a>
-                        {% endif %}
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'delivery_earnings' %}active{% endif %}" 
-                           href="{% url 'delivery_earnings' %}">
-                            <i class="fas fa-wallet me-2"></i>Earnings
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'delivery_profile' %}active{% endif %}" 
-                           href="{% url 'delivery_profile' %}">
-                            <i class="fas fa-user me-2"></i>Profile
-                        </a>
-                    </li>
-                </ul>
-                <div class="d-flex align-items-center">
-                    <span class="text-light me-3">
-                        <i class="fas fa-user-circle me-1"></i>
-                        {{ request.user.get_full_name|default:request.user.username }}
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <i class="fas fa-truck"></i>
+                <h1>Craftsy Delivery</h1>
+            </div>
+            <div class="sidebar-menu">
+                <a href="{% url 'delivery_dashboard' %}" class="menu-item">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{% url 'delivery_history' %}" class="menu-item active">
+                    <i class="fas fa-history"></i>
+                    <span>History</span>
+                </a>
+                <a href="{% if active_delivery and active_delivery.id %}{% url 'delivery_tracking' delivery_id=active_delivery.id %}{% else %}#{% endif %}" 
+                   class="menu-item {% if not active_delivery or not active_delivery.id %}disabled{% endif %}">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>Live Tracking</span>
+                </a>
+                <a href="{% url 'delivery_earnings' %}" class="menu-item">
+                    <i class="fas fa-wallet"></i>
+                    <span>Earnings</span>
+                </a>
+                <a href="{% url 'delivery_profile' %}" class="menu-item">
+                    <i class="fas fa-user"></i>
+                    <span>Profile</span>
+                </a>
+            </div>
+        </div>
+        
+        <!-- Main Content Area -->
+        <div class="content-area">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <button id="toggleSidebar" class="btn-action btn-primary d-md-none">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+                </div>
+                <a href="{% url 'logout' %}" class="btn-action btn-primary">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </a>
+            </div>
+            
+            <!-- Order Title and Status -->
+            <div class="mb-4">
+                <h2>Order #{{ delivery.order.id }} - 
+                    <span class="badge badge-{% if delivery.status == 'delivered' %}success{% elif delivery.status == 'in_transit' %}primary{% elif delivery.status == 'cancelled' %}danger{% else %}warning{% endif %}">
+                        {{ delivery.get_status_display }}
                     </span>
-                    <a href="{% url 'logout' %}" class="btn btn-outline-light btn-sm">
-                        <i class="fas fa-sign-out-alt me-2"></i>Logout
-                    </a>
-                </div>
+                </h2>
+                <p class="text-secondary">Placed on {{ delivery.order.created_at|date:'M d, Y h:i A' }}</p>
             </div>
-        </div>
-    </nav>
-
-    <div class="container main-content">
-        <div class="row">
-            <!-- Order Information -->
-            <div class="col-md-4">
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title mb-4">
-                            <i class="fas fa-info-circle me-2"></i>Order Details
-                        </h5>
-                        <div class="mb-3">
-                            <strong>Order ID:</strong> #{{ delivery.order.id }}
+            
+            <!-- Customer Information -->
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-user"></i> Customer Information</h2>
+                </div>
+                <div class="card-body">
+                    <div class="customer-info">
+                        <div class="customer-header">
+                            <div class="customer-avatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div>
+                                <h4 class="customer-name">{{ delivery.order.user.get_full_name }}</h4>
+                                <p class="customer-contact">{{ delivery.order.user.email }} | {{ delivery.order.user.phone|default:"Not provided" }}</p>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <strong>Status:</strong>
-                            <span class="status-badge status-{{ delivery.status|lower }}">
-                                {{ delivery.get_status_display }}
-                            </span>
+                    </div>
+                    
+                    <div class="grid-container">
+                        <div class="order-card">
+                            <h3><i class="fas fa-map-marker-alt"></i> Delivery Address</h3>
+                            <p>{{ delivery.order.address }}</p>
+                            <div id="deliveryMap" class="map-container mt-3"></div>
                         </div>
-                        <div class="mb-3">
-                            <strong>Customer:</strong> {{ delivery.order.user.get_full_name }}
-                        </div>
-                        <div class="mb-3">
-                            <strong>Phone:</strong> {{ delivery.order.user.phone_number }}
-                        </div>
-                        <div class="mb-3">
-                            <strong>Amount:</strong> ₹{{ delivery.order.total_price }}
-                        </div>
-                        <div class="mb-3">
-                            <strong>Expected Delivery:</strong><br>
-                            {{ delivery.expected_delivery_time|date:"F j, Y, g:i a" }}
+                        
+                        <div class="order-card">
+                            <h3><i class="fas fa-info-circle"></i> Order Details</h3>
+                            <div class="order-detail">
+                                <div class="order-detail-label">Order Date</div>
+                                <div class="order-detail-value">{{ delivery.order.created_at|date:'M d, Y h:i A' }}</div>
+                            </div>
+                            <div class="order-detail">
+                                <div class="order-detail-label">Payment Method</div>
+                                <div class="order-detail-value">{{ delivery.order.payment_method }}</div>
+                            </div>
+                            <div class="order-detail">
+                                <div class="order-detail-label">Total Items</div>
+                                <div class="order-detail-value">{{ delivery.order.items.count }}</div>
+                            </div>
+                            <div class="order-detail">
+                                <div class="order-detail-label">Order Total</div>
+                                <div class="order-detail-value">₹{{ delivery.order.total_price }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Delivery Address -->
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title mb-4">
-                            <i class="fas fa-map-marker-alt me-2"></i>Delivery Address
-                        </h5>
-                        <p>{{ delivery.delivery_address }}</p>
-                        {% if delivery.special_instructions %}
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>{{ delivery.special_instructions }}
+            </div>
+            
+            <!-- Order Timeline -->
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-history"></i> Order Timeline</h2>
+                </div>
+                <div class="card-body">
+                    <div class="delivery-timeline">
+                        {% if delivery.order.created_at %}
+                        <div class="timeline-item">
+                            <div class="timeline-icon">
+                                <i class="fas fa-shopping-cart"></i>
                             </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Order Placed</div>
+                                <div class="timeline-date">{{ delivery.order.created_at|date:'M d, Y h:i A' }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if delivery.accepted_at %}
+                        <div class="timeline-item">
+                            <div class="timeline-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Order Accepted</div>
+                                <div class="timeline-date">{{ delivery.accepted_at|date:'M d, Y h:i A' }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if delivery.picked_up_at %}
+                        <div class="timeline-item">
+                            <div class="timeline-icon">
+                                <i class="fas fa-box"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Picked Up</div>
+                                <div class="timeline-date">{{ delivery.picked_up_at|date:'M d, Y h:i A' }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if delivery.in_transit_at %}
+                        <div class="timeline-item">
+                            <div class="timeline-icon">
+                                <i class="fas fa-truck"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">In Transit</div>
+                                <div class="timeline-date">{{ delivery.in_transit_at|date:'M d, Y h:i A' }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if delivery.delivered_at %}
+                        <div class="timeline-item">
+                            <div class="timeline-icon">
+                                <i class="fas fa-home"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Delivered</div>
+                                <div class="timeline-date">{{ delivery.delivered_at|date:'M d, Y h:i A' }}</div>
+                            </div>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
             </div>
-
-            <!-- Map and Status Timeline -->
-            <div class="col-md-8">
-                <!-- Live Location Map -->
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h5 class="card-title mb-4">
-                            <i class="fas fa-map me-2"></i>Live Location
-                        </h5>
-                        <div id="map"></div>
-                    </div>
+            
+            <!-- Order Items -->
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-shopping-cart"></i> Order Items</h2>
                 </div>
-
-                <!-- Status Timeline -->
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title mb-4">
-                            <i class="fas fa-clock me-2"></i>Delivery Timeline
-                        </h5>
-                        <div class="timeline">
-                            {% for status in delivery.status_history.all %}
-                                <div class="timeline-item {% if status.completed %}completed{% elif status.active %}active{% endif %}">
-                                    <div class="timeline-content">
-                                        <h6>{{ status.get_status_display }}</h6>
-                                        <p class="text-muted mb-0">{{ status.timestamp|date:"F j, Y, g:i a" }}</p>
-                                        {% if status.notes %}
-                                            <p class="mb-0">{{ status.notes }}</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            {% endfor %}
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Price</th>
+                                    <th>Quantity</th>
+                                    <th class="text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in order_items %}
+                                <tr>
+                                    <td>
+                                        <div class="product-info">
+                                            <img src="{{ item.product_image }}" class="product-img" alt="{{ item.product_name }}" />
+                                            <span>{{ item.product_name }}</span>
+                                        </div>
+                                    </td>
+                                    <td>₹{{ item.price }}</td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td class="text-right">₹{{ item.total }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="order-summary">
+                        <div class="summary-row">
+                            <span class="summary-label">Subtotal</span>
+                            <span>₹{{ delivery.order.subtotal }}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Delivery Fee</span>
+                            <span>₹{{ delivery.order.delivery_fee }}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Tax</span>
+                            <span>₹{{ delivery.order.tax_amount }}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Total</span>
+                            <span>₹{{ delivery.order.total_price }}</span>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Status Update Modal -->
-    <div class="modal fade" id="statusModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Update Delivery Status</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="statusUpdateForm">
-                        {% csrf_token %}
-                        <div class="mb-3">
-                            <label class="form-label">Status</label>
-                            <select class="form-select" name="status" required>
-                                <option value="pending">Pending</option>
-                                <option value="in_transit">In Transit</option>
-                                <option value="delivered">Delivered</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Notes</label>
-                            <textarea class="form-control" name="notes" rows="3"></textarea>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" onclick="submitStatusUpdate()">Update Status</button>
-                </div>
+            
+            <!-- Action Buttons -->
+            <div class="d-flex justify-content-end mb-4">
+                <a href="{% url 'delivery_history' %}" class="btn-action btn-primary">
+                    <i class="fas fa-arrow-left"></i> Back to History
+                </a>
+                {% if delivery.status == 'pending' %}
+                <a href="{% url 'accept_delivery' delivery.id %}" class="btn-action btn-success">
+                    <i class="fas fa-check"></i> Accept Delivery
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>
 
     <!-- Scripts -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     
     <script>
-        // Initialize map
-        const map = L.map('map').setView(
-            [{{ delivery.current_location.latitude }}, {{ delivery.current_location.longitude }}], 
-            13
-        );
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
-        // Add markers
-        const deliveryMarker = L.marker(
-            [{{ delivery.current_location.latitude }}, {{ delivery.current_location.longitude }}]
-        ).addTo(map).bindPopup('Current Location');
-
-        const destinationMarker = L.marker(
-            [{{ delivery.destination_location.latitude }}, {{ delivery.destination_location.longitude }}]
-        ).addTo(map).bindPopup('Delivery Address');
-
-        // Update location periodically
-        function updateLocation() {
-            fetch(`/delivery/{{ delivery.id }}/location/`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        deliveryMarker.setLatLng([data.latitude, data.longitude]);
-                        map.panTo([data.latitude, data.longitude]);
-                    }
-                });
-        }
-
-        setInterval(updateLocation, 30000);
-
-        // Status update functions
-        function updateStatus() {
-            new bootstrap.Modal(document.getElementById('statusModal')).show();
-        }
-
-        function submitStatusUpdate() {
-            const form = document.getElementById('statusUpdateForm');
-            const formData = new FormData(form);
+        document.addEventListener('DOMContentLoaded', function() {
+            // Toggle sidebar on mobile
+            const toggleSidebar = document.getElementById('toggleSidebar');
+            const sidebar = document.getElementById('sidebar');
             
-            fetch(`/delivery/{{ delivery.id }}/update-status/`, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': '{{ csrf_token }}'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Error updating status: ' + data.error);
-                }
-            });
-        }
+            if (toggleSidebar) {
+                toggleSidebar.addEventListener('click', function() {
+                    sidebar.classList.toggle('show');
+                });
+            }
+            
+            // Initialize delivery address map
+            const mapContainer = document.getElementById('deliveryMap');
+            
+            if (mapContainer) {
+                const map = L.map('deliveryMap').setView([
+                    {{ delivery.destination_lat|default:28.6129 }}, 
+                    {{ delivery.destination_lng|default:77.2295 }}
+                ], 15);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+                
+                // Add delivery address marker
+                L.marker([
+                    {{ delivery.destination_lat|default:28.6129 }}, 
+                    {{ delivery.destination_lng|default:77.2295 }}
+                ]).addTo(map)
+                  .bindPopup("Delivery Address")
+                  .openPopup();
+            }
+        });
     </script>
 </body>
 </html> 

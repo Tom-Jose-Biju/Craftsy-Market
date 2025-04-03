@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Delivery Ratings - Craftsy</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@3.5.0/dist/full.css" rel="stylesheet" type="text/css" />
+    <style>
+        :root {
+            --primary-color: #ff6b6b;
+            --secondary-color: #4a90e2;
+            --background-dark: #121212;
+            --card-bg: rgba(26, 26, 26, 0.95);
+            --hover-color: #ff5252;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --success-color: #2ecc71;
+            --warning-color: #f1c40f;
+            --info-color: #3498db;
+        }
+
+        body {
+            background-color: var(--background-dark);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            position: relative;
+            padding-bottom: 60px;
+        }
+
+        .navbar {
+            background-color: rgba(18, 18, 18, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            position: fixed;
+            width: 100%;
+            z-index: 1000;
+        }
+
+        .ratings-container {
+            margin: 7rem auto 3rem;
+            max-width: 1200px;
+            padding: 0 20px;
+        }
+
+        .page-header {
+            background: linear-gradient(45deg, var(--card-bg), rgba(26, 26, 26, 0.8));
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 3rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .page-header h1 {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .rating-overview {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .ratings-section {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .section-header h2 {
+            font-size: 1.8rem;
+            color: var(--primary-color);
+            margin: 0;
+        }
+
+        .rating-stat {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .rating-number {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--warning-color);
+            margin-right: 1rem;
+        }
+
+        .rating-label {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .star-rating {
+            font-size: 1.5rem;
+            color: var(--warning-color);
+        }
+
+        .star-empty {
+            color: var(--text-secondary);
+        }
+
+        .rating-card {
+            background: rgba(40, 40, 40, 0.95);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .rating-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.2);
+            border-color: var(--primary-color);
+        }
+
+        .rating-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .rating-date {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .order-info {
+            color: var(--secondary-color);
+            font-weight: 600;
+        }
+
+        .comment-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-style: italic;
+            color: var(--text-secondary);
+        }
+
+        .progress {
+            height: 0.5rem;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar {
+            background-color: var(--warning-color);
+        }
+
+        .rating-distribution {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .rating-label-sm {
+            width: 40px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .progress-container {
+            flex-grow: 1;
+            margin: 0 1rem;
+        }
+
+        .rating-count {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            width: 40px;
+            text-align: right;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            background: rgba(40, 40, 40, 0.5);
+            border-radius: 12px;
+            margin: 1.5rem 0;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+        }
+
+        .empty-state h4 {
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .empty-state p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar bg-base-300 fixed-top">
+        <div class="container">
+            <div class="flex-1">
+                <a class="btn btn-ghost normal-case text-xl" href="{% url 'home' %}">Craftsy</a>
+            </div>
+            <div class="flex-none">
+                <ul class="menu menu-horizontal px-1">
+                    <li><a href="{% url 'home' %}"><i class="fas fa-home me-2"></i>Home</a></li>
+                    {% if user.is_authenticated %}
+                        {% if user.user_type == 'delivery_partner' %}
+                            <li><a href="{% url 'delivery_dashboard' %}"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</a></li>
+                            <li><a href="{% url 'delivery_ratings' %}"><i class="fas fa-star me-2"></i>My Ratings</a></li>
+                            <li><a href="{% url 'delivery_history' %}"><i class="fas fa-history me-2"></i>History</a></li>
+                            <li><a href="{% url 'delivery_earnings' %}"><i class="fas fa-money-bill-wave me-2"></i>Earnings</a></li>
+                            <li><a href="{% url 'delivery_profile' %}"><i class="fas fa-user me-2"></i>Profile</a></li>
+                        {% endif %}
+                        <li>
+                            <form action="{% url 'logout' %}" method="post" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-ghost normal-case"><i class="fas fa-sign-out-alt me-2"></i>Logout</button>
+                            </form>
+                        </li>
+                    {% else %}
+                        <li><a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Login</a></li>
+                        <li><a href="{% url 'register' %}" class="btn btn-ghost btn-sm">Register</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="ratings-container">
+        <div class="page-header">
+            <h1><i class="fas fa-star"></i>My Delivery Ratings</h1>
+        </div>
+        
+        <div class="rating-overview">
+            <div class="section-header">
+                <h2><i class="fas fa-chart-bar"></i>Rating Overview</h2>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="rating-stat">
+                        <div class="rating-number">{{ average_rating|floatformat:1 }}</div>
+                        <div class="rating-label">
+                            <div class="star-rating">
+                                {% for i in "12345"|make_list %}
+                                    {% if forloop.counter <= average_rating_whole %}
+                                        <i class="fas fa-star"></i>
+                                    {% elif forloop.counter <= average_rating_half %}
+                                        <i class="fas fa-star-half-alt"></i>
+                                    {% else %}
+                                        <i class="far fa-star star-empty"></i>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                            <div>Average Rating</div>
+                            <div class="small text-secondary">{{ total_ratings }} ratings total</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-8">
+                    <div class="rating-distribution-container">
+                        {% for r in rating_distribution %}
+                        <div class="rating-distribution">
+                            <div class="rating-label-sm">{{ r.rating }} ★</div>
+                            <div class="progress-container">
+                                <div class="progress">
+                                    <div class="progress-bar" style="width: {{ r.percentage }}%"></div>
+                                </div>
+                            </div>
+                            <div class="rating-count">{{ r.count }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ratings-section">
+            <div class="section-header">
+                <h2><i class="fas fa-comment-alt"></i>Customer Feedback</h2>
+            </div>
+            
+            {% if ratings %}
+                {% for rating in ratings %}
+                <div class="rating-card">
+                    <div class="rating-header">
+                        <div class="order-info">Order #{{ rating.delivery.order.id }}</div>
+                        <div class="star-rating">
+                            {% for i in "12345"|make_list %}
+                                {% if forloop.counter <= rating.rating %}
+                                    <i class="fas fa-star"></i>
+                                {% else %}
+                                    <i class="far fa-star star-empty"></i>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="rating-date">
+                        <i class="far fa-calendar-alt"></i>
+                        {{ rating.created_at|date:"F j, Y" }}
+                    </div>
+                    
+                    {% if rating.comment %}
+                    <div class="comment-box">
+                        "{{ rating.comment }}"
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                
+                <!-- Pagination -->
+                {% if ratings.has_other_pages %}
+                <div class="pagination-container d-flex justify-content-center mt-4">
+                    <div class="join">
+                        {% if ratings.has_previous %}
+                            <a href="?page=1" class="btn join-item">&laquo; First</a>
+                            <a href="?page={{ ratings.previous_page_number }}" class="btn join-item">&lsaquo; Prev</a>
+                        {% endif %}
+                        
+                        {% for i in ratings.paginator.page_range %}
+                            {% if ratings.number == i %}
+                                <span class="btn join-item btn-active">{{ i }}</span>
+                            {% elif i > ratings.number|add:'-3' and i < ratings.number|add:'3' %}
+                                <a href="?page={{ i }}" class="btn join-item">{{ i }}</a>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if ratings.has_next %}
+                            <a href="?page={{ ratings.next_page_number }}" class="btn join-item">Next &rsaquo;</a>
+                            <a href="?page={{ ratings.paginator.num_pages }}" class="btn join-item">Last &raquo;</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-comment-slash"></i>
+                    <h4>No Ratings Yet</h4>
+                    <p>You haven't received any delivery ratings yet. Ratings will appear here after customers rate your delivery service.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

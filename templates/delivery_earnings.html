@@ -1,268 +1,812 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Delivery Earnings - Craftsy</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <style>
+        :root {
+            --primary-color: #3a86ff;
+            --secondary-color: #8338ec;
+            --success-color: #06d6a0;
+            --warning-color: #ffbe0b;
+            --danger-color: #ef476f;
+            --dark-bg: #121212;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --hover-bg: rgba(255, 255, 255, 0.1);
+            --text-color: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --border-radius: 12px;
+            --transition-speed: 0.3s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            background-color: #121212;
-            color: #e0e0e0;
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            font-family: 'Poppins', sans-serif;
+            min-height: 100vh;
         }
-        .navbar {
-            background-color: rgba(0, 0, 0, 0.9);
+
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: rgba(0, 0, 0, 0.9);
             backdrop-filter: blur(10px);
+            padding: 1.5rem 1rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: all var(--transition-speed);
         }
-        .card {
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            border-radius: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding: 0 0.5rem;
         }
+
+        .sidebar-logo i {
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-right: 1rem;
+        }
+
+        .sidebar-logo h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .sidebar-menu {
+            margin-bottom: 2rem;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all var(--transition-speed);
+            color: var(--text-color);
+            text-decoration: none;
+        }
+
+        .menu-item i {
+            font-size: 1.25rem;
+            margin-right: 1rem;
+            transition: all var(--transition-speed);
+        }
+
+        .menu-item:hover {
+            background: var(--hover-bg);
+        }
+
+        .menu-item.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .menu-item.active i {
+            color: white;
+        }
+
+        .menu-item.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .content-area {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-right: 1.5rem;
+        }
+
+        .user-info i {
+            font-size: 1.5rem;
+            margin-right: 0.5rem;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
         .stat-card {
-            transition: transform 0.3s;
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            transition: transform var(--transition-speed);
+            overflow: hidden;
+            position: relative;
+            z-index: 1;
         }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            opacity: 0.05;
+            z-index: -1;
+        }
+
         .stat-card:hover {
             transform: translateY(-5px);
         }
-        .earnings-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #28a745;
+
+        .stat-card h3 {
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
         }
-        .table {
-            color: #e0e0e0;
+
+        .stat-value {
+            display: flex;
+            align-items: center;
         }
-        .table thead th {
-            background-color: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.1);
+
+        .stat-value h2 {
+            font-size: 2.5rem;
+            margin-right: 0.5rem;
         }
-        .table td {
-            border-color: rgba(255, 255, 255, 0.1);
+
+        .stat-value i {
+            font-size: 1.8rem;
+            color: var(--primary-color);
         }
-        .rating-stars {
-            color: #ffc107;
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
         }
-        .status-badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        .status-pending { background-color: #ffc107; color: #000; }
-        .status-processed { background-color: #17a2b8; color: #fff; }
-        .status-paid { background-color: #28a745; color: #fff; }
-        .status-failed { background-color: #dc3545; color: #fff; }
+
+        .card-header h2 {
+            color: white;
+            font-size: 1.25rem;
+            margin: 0;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .btn-action {
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all var(--transition-speed);
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-info {
+            background: var(--secondary-color);
+            color: white;
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-action i {
+            margin-right: 0.5rem;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table th, table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        table th {
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .form-select, .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: var(--border-radius);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            font-family: 'Poppins', sans-serif;
+            transition: all var(--transition-speed);
+        }
+
+        .form-select:focus, .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(58, 134, 255, 0.2);
+        }
+
+        .filter-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            position: relative;
+        }
+
+        /* Badges and statuses */
+        .badge {
+            display: inline-block;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .badge-warning {
+            background-color: var(--warning-color);
+            color: black;
+        }
+
+        .badge-info {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .earnings-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .summary-item {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .summary-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 4px;
+            background: var(--primary-color);
+        }
+
+        .summary-item h3 {
+            margin-bottom: 1rem;
+            color: var(--text-color);
+        }
+
+        .summary-item p {
+            font-size: 2rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .summary-item.this-month::before {
+            background: var(--success-color);
+        }
+
+        .summary-item.last-month::before {
+            background: var(--warning-color);
+        }
+
+        .summary-item.this-year::before {
+            background: var(--secondary-color);
+        }
+
+        .datatable {
+            width: 100%;
+            color: var(--text-color);
+        }
+
+        .datatable-header {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .datatable-row:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+                position: fixed;
+                z-index: 1000;
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            
+            .content-area {
+                margin-left: 0;
+            }
+            
+            .stats-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .filter-form {
+                grid-template-columns: 1fr;
+            }
+            
+            .earnings-summary {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
-    <!-- Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'delivery_dashboard' %}">
-                <i class="fas fa-truck me-2"></i>Craftsy Delivery
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'delivery_dashboard' %}">
-                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'delivery_history' %}">
-                            <i class="fas fa-history me-2"></i>History
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="{% url 'delivery_earnings' %}">
-                            <i class="fas fa-wallet me-2"></i>Earnings
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'delivery_profile' %}">
-                            <i class="fas fa-user me-2"></i>Profile
-                        </a>
-                    </li>
-                </ul>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <i class="fas fa-truck"></i>
+                <h1>Craftsy Delivery</h1>
+            </div>
+            <div class="sidebar-menu">
+                <a href="{% url 'delivery_dashboard' %}" class="menu-item">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{% url 'delivery_history' %}" class="menu-item">
+                    <i class="fas fa-history"></i>
+                    <span>History</span>
+                </a>
+                <a href="{% if active_delivery and active_delivery.id %}{% url 'delivery_tracking' delivery_id=active_delivery.id %}{% else %}#{% endif %}" 
+                   class="menu-item {% if not active_delivery or not active_delivery.id %}disabled{% endif %}">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>Live Tracking</span>
+                </a>
+                <a href="{% url 'delivery_earnings' %}" class="menu-item active">
+                    <i class="fas fa-wallet"></i>
+                    <span>Earnings</span>
+                </a>
+                <a href="{% url 'delivery_profile' %}" class="menu-item">
+                    <i class="fas fa-user"></i>
+                    <span>Profile</span>
+                </a>
             </div>
         </div>
-    </nav>
+        
+        <!-- Main Content Area -->
+        <div class="content-area">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <button id="toggleSidebar" class="btn-action btn-primary d-md-none">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+                </div>
+                <a href="{% url 'logout' %}" class="btn-action btn-primary">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </a>
+            </div>
+            
+            <!-- Earnings Summary -->
+            <div class="earnings-summary">
+                <div class="summary-item this-month">
+                    <h3>This Month</h3>
+                    <p>₹{{ monthly_earnings|default:0 }}</p>
+                </div>
+                <div class="summary-item last-month">
+                    <h3>Last Month</h3>
+                    <p>₹{{ last_month_earnings|default:0 }}</p>
+                </div>
+                <div class="summary-item this-year">
+                    <h3>This Year</h3>
+                    <p>₹{{ yearly_earnings|default:0 }}</p>
+                </div>
+            </div>
+            
+            <!-- Earnings Chart -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Earnings Overview</h2>
+                    <div>
+                        <button class="btn-action btn-primary period-btn" data-period="week">
+                            Week
+                        </button>
+                        <button class="btn-action btn-info period-btn" data-period="month">
+                            Month
+                        </button>
+                        <button class="btn-action btn-info period-btn" data-period="year">
+                            Year
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="earningsChart"></canvas>
+                    </div>
+                </div>
+            </div>
 
-    <div class="container" style="margin-top: 80px;">
-        <!-- Performance Overview -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <h2 class="mb-4">Earnings Dashboard</h2>
-            </div>
-            <div class="col-md-3">
-                <div class="card stat-card">
-                    <div class="card-body">
-                        <h6 class="card-title text-muted">Total Earnings</h6>
-                        <div class="earnings-value">₹{{ performance_metrics.total_earnings|floatformat:2 }}</div>
-                        <small class="text-muted">Lifetime earnings</small>
+            <!-- Earnings Breakdown -->
+            <div class="stats-container" id="earningsBreakdown">
+                <div class="stat-card">
+                    <h3>Delivery Fees</h3>
+                    <div class="stat-value">
+                        <h2 id="deliveryFees">₹0</h2>
+                        <i class="fas fa-truck text-primary"></i>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <h3>Tips</h3>
+                    <div class="stat-value">
+                        <h2 id="tipAmount">₹0</h2>
+                        <i class="fas fa-hand-holding-usd text-success"></i>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <h3>Bonuses</h3>
+                    <div class="stat-value">
+                        <h2 id="bonusAmount">₹0</h2>
+                        <i class="fas fa-award text-warning"></i>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total</h3>
+                    <div class="stat-value">
+                        <h2 id="totalAmount">₹0</h2>
+                        <i class="fas fa-rupee-sign"></i>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card stat-card">
-                    <div class="card-body">
-                        <h6 class="card-title text-muted">Total Deliveries</h6>
-                        <div class="earnings-value">{{ performance_metrics.total_deliveries }}</div>
-                        <small class="text-muted">Completed deliveries</small>
+            
+            <!-- Filter Section -->
+            <div class="filter-card">
+                <h3 class="mb-3"><i class="fas fa-filter me-2"></i>Filter Transactions</h3>
+                <form method="get" class="filter-form">
+                    <div class="form-group">
+                        <label class="form-label">Date Range</label>
+                        <select name="date_range" class="form-select">
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
                     </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card stat-card">
-                    <div class="card-body">
-                        <h6 class="card-title text-muted">Average Rating</h6>
-                        <div class="earnings-value">
-                            {{ performance_metrics.avg_rating|floatformat:1 }}
-                            <small class="rating-stars">
-                                {% with ''|center:performance_metrics.avg_rating|floatformat:0 as stars %}
-                                {% for _ in stars %}★{% endfor %}
-                                {% endwith %}
-                            </small>
-                        </div>
-                        <small class="text-muted">Customer satisfaction</small>
+                    <div class="form-group">
+                        <label class="form-label">Type</label>
+                        <select name="transaction_type" class="form-select">
+                            <option value="">All</option>
+                            <option value="delivery_fee">Delivery Fee</option>
+                            <option value="tip">Tip</option>
+                            <option value="bonus">Bonus</option>
+                        </select>
                     </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card stat-card">
-                    <div class="card-body">
-                        <h6 class="card-title text-muted">Avg. Per Delivery</h6>
-                        <div class="earnings-value">₹{{ performance_metrics.avg_earnings_per_delivery|floatformat:2 }}</div>
-                        <small class="text-muted">Average earnings</small>
+                    <div class="form-group">
+                        <label class="form-label">Sort By</label>
+                        <select name="sort" class="form-select">
+                            <option value="date_desc">Date (Newest First)</option>
+                            <option value="date_asc">Date (Oldest First)</option>
+                            <option value="amount_desc">Amount (High to Low)</option>
+                            <option value="amount_asc">Amount (Low to High)</option>
+                        </select>
                     </div>
-                </div>
+                    <div class="form-group d-flex align-items-end">
+                        <button type="submit" class="btn-action btn-primary w-100">
+                            <i class="fas fa-filter me-2"></i>Filter
+                        </button>
+                    </div>
+                </form>
             </div>
-        </div>
 
-        <!-- Monthly Earnings Chart -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Monthly Earnings</h5>
-                        <canvas id="monthlyEarningsChart"></canvas>
-                    </div>
+            <!-- Transaction History -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Transaction History</h2>
+                    <button id="exportEarnings" class="btn-action btn-primary">
+                        <i class="fas fa-download me-2"></i>Export
+                    </button>
                 </div>
-            </div>
-        </div>
-
-        <!-- Recent Earnings -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Recent Deliveries</h5>
-                        <div class="table-responsive">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Order ID</th>
-                                        <th>Date</th>
-                                        <th>Base Amount</th>
-                                        <th>Delivery Fee</th>
-                                        <th>Total</th>
-                                        <th>Rating</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for delivery in delivery_details %}
-                                    <tr>
-                                        <td>#{{ delivery.order_id }}</td>
-                                        <td>{{ delivery.timestamp|date:"M d, Y" }}</td>
-                                        <td>₹{{ delivery.delivery_share|floatformat:2 }}</td>
-                                        <td>₹{{ delivery.delivery_fee|floatformat:2 }}</td>
-                                        <td>₹{{ delivery.total|floatformat:2 }}</td>
-                                        <td>
-                                            <span class="rating-stars">
-                                                {% with ''|center:delivery.rating|floatformat:0 as stars %}
-                                                {% for _ in stars %}★{% endfor %}
-                                                {% endwith %}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="datatable">
+                            <thead class="datatable-header">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Order ID</th>
+                                    <th>Description</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for transaction in transactions %}
+                                <tr class="datatable-row">
+                                    <td>{{ transaction.date }}</td>
+                                    <td>
+                                        <a href="{% url 'delivery_order_details' delivery_id=transaction.delivery_id %}">
+                                            #{{ transaction.order_id }}
+                                        </a>
+                                    </td>
+                                    <td>{{ transaction.description }}</td>
+                                    <td>
+                                        <span class="badge badge-{% if transaction.type == 'delivery_fee' %}info{% elif transaction.type == 'tip' %}success{% else %}warning{% endif %}">
+                                            {{ transaction.type_display }}
+                                        </span>
+                                    </td>
+                                    <td>₹{{ transaction.amount }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Chart initialization -->
     <script>
-        // Monthly earnings chart
-        const monthlyData = {{ monthly_earnings|safe }};
-        const labels = monthlyData.map(entry => {
-            const date = new Date(entry.month);
-            return date.toLocaleDateString('default', { month: 'short', year: 'numeric' });
-        });
-        const earnings = monthlyData.map(entry => entry.total_earnings);
-
-        const ctx = document.getElementById('monthlyEarningsChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Monthly Earnings (₹)',
-                    data: earnings,
-                    borderColor: '#28a745',
-                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: true,
-                        labels: {
-                            color: '#e0e0e0'
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
-                        },
-                        ticks: {
-                            color: '#e0e0e0'
-                        }
-                    },
-                    x: {
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
-                        },
-                        ticks: {
-                            color: '#e0e0e0'
-                        }
-                    }
-                }
+        document.addEventListener('DOMContentLoaded', function() {
+            // Toggle sidebar on mobile
+            const toggleSidebar = document.getElementById('toggleSidebar');
+            const sidebar = document.getElementById('sidebar');
+            
+            if (toggleSidebar) {
+                toggleSidebar.addEventListener('click', function() {
+                    sidebar.classList.toggle('show');
+                });
             }
+            
+            // Export earnings functionality
+            const exportBtn = document.getElementById('exportEarnings');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', function() {
+                    // Get current filter values
+                    const dateRange = document.querySelector('select[name="date_range"]').value;
+                    const transactionType = document.querySelector('select[name="transaction_type"]').value;
+                    
+                    // Build the URL with query parameters
+                    let exportUrl = "{% url 'export_earnings' %}?date_range=" + dateRange;
+                    if (transactionType) {
+                        exportUrl += "&transaction_type=" + transactionType;
+                    }
+                    
+                    // Navigate to the export URL
+                    window.location.href = exportUrl;
+                });
+            }
+            
+            // Initialize chart
+            const ctx = document.getElementById('earningsChart');
+            let earningsChart;
+            
+            // Period buttons functionality
+            const periodButtons = document.querySelectorAll('.period-btn');
+            let currentPeriod = 'month'; // Default period
+            
+            function updateChartData(period) {
+                // This would typically fetch data from an API
+                // For demonstration, we're using mock data
+                let labels, data;
+                
+                if (period === 'week') {
+                    labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                    data = [150, 230, 180, 290, 350, 420, 290];
+                } else if (period === 'month') {
+                    labels = Array.from({length: 30}, (_, i) => i + 1);
+                    data = Array.from({length: 30}, () => Math.floor(Math.random() * 300) + 100);
+                } else {
+                    labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    data = Array.from({length: 12}, () => Math.floor(Math.random() * 5000) + 2000);
+                }
+                
+                return { labels, data };
+            }
+            
+            function createChart(period) {
+                const { labels, data } = updateChartData(period);
+                
+                if (earningsChart) {
+                    earningsChart.destroy();
+                }
+                
+                earningsChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Earnings',
+                            data: data,
+                            backgroundColor: 'rgba(58, 134, 255, 0.2)',
+                            borderColor: '#3a86ff',
+                            borderWidth: 2,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#3a86ff',
+                            pointHoverBackgroundColor: '#3a86ff',
+                            pointHoverBorderColor: '#fff',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    color: '#e0e0e0'
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                bodyColor: '#fff',
+                                titleColor: '#fff'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#a0a0a0'
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                },
+                                ticks: {
+                                    color: '#a0a0a0',
+                                    callback: function(value) {
+                                        return '₹' + value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Update earnings breakdown
+                updateEarningsBreakdown();
+            }
+            
+            function updateEarningsBreakdown() {
+                // For demonstration, we're using random data
+                const deliveryFees = Math.floor(Math.random() * 1000) + 500;
+                const tips = Math.floor(Math.random() * 300) + 100;
+                const bonuses = Math.floor(Math.random() * 200) + 50;
+                const total = deliveryFees + tips + bonuses;
+                
+                document.getElementById('deliveryFees').textContent = `₹${deliveryFees}`;
+                document.getElementById('tipAmount').textContent = `₹${tips}`;
+                document.getElementById('bonusAmount').textContent = `₹${bonuses}`;
+                document.getElementById('totalAmount').textContent = `₹${total}`;
+            }
+            
+            // Initialize chart with default period
+            createChart(currentPeriod);
+            
+            // Add event listeners to period buttons
+            periodButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const period = this.getAttribute('data-period');
+                    currentPeriod = period;
+                    
+                    // Update button styles
+                    periodButtons.forEach(btn => {
+                        if (btn.getAttribute('data-period') === period) {
+                            btn.className = 'btn-action btn-primary';
+                        } else {
+                            btn.className = 'btn-action btn-info';
+                        }
+                    });
+                    
+                    // Update chart
+                    createChart(period);
+                });
+            });
         });
     </script>
 </body>

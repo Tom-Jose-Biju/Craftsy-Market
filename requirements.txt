@@ -10,8 +10,8 @@ prophet==1.1.5
 python-dotenv==1.0.1
 reportlab==4.2.2
 stripe==10.6.0
-torch==2.5.0
-transformers
+torch>=2.0.0
+transformers>=4.30.0
 webdriver_manager==4.0.2
 gunicorn
 whitenoise

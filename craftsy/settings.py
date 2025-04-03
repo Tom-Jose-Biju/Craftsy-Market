@@ -16,6 +16,11 @@ from pathlib import Path
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,28 +36,29 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
-from dotenv import load_dotenv
-
-load_dotenv(override=True)
-
 SITE_ID = 1
 # Stripe settings
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
+
+# Ensure Stripe keys are set
+if not STRIPE_SECRET_KEY or not STRIPE_PUBLISHABLE_KEY:
+    raise ValueError("Stripe API keys are not set in environment variables")
+
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.auth',
     'django.contrib.admin',
+    'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.sites',
+    'channels',  
+    'accounts.apps.AccountsConfig',
     'widget_tweaks',
     'social_django',
-    'channels',
-    'accounts.apps.AccountsConfig',
+    'django.contrib.sites',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -186,10 +192,10 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
 ASGI_APPLICATION = 'craftsy.asgi.application'
 
 CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.FileChannelLayer",
-        "CONFIG": {
-            "ROOT_DIR": os.path.join(BASE_DIR, "channel_layers"),
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
         },
     },
 }
@@ -198,3 +204,6 @@ GST_RATE = 0.18
 
 SELENIUM_TIMEOUT = 10
 SELENIUM_HEADLESS = True
+
+# Google Maps API Key for delivery tracking
+GOOGLE_MAPS_API_KEY = "AIzaSyCZyttHfKSvi43j_DIYT9b8ZpxUrfCsH34"  # This is a placeholder key, replace with your actual API key

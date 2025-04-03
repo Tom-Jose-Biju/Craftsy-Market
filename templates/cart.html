@@ -170,7 +170,11 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://js.stripe.com/v3/"></script>
     <script>
+        // Initialize Stripe with publishable key
+        const stripe = Stripe('{{ stripe_public_key }}');  // The view passes STRIPE_PUBLISHABLE_KEY as stripe_public_key
+
         function updateCartDisplay() {
             $.ajax({
                 url: "{% url 'get_cart' %}",
@@ -180,41 +184,42 @@
                     cartItems.empty();
                     let total = 0;
 
-                    if (response.cart_items.length === 0) {
+                    if (!response.cart_items || response.cart_items.length === 0) {
                         $('#emptyCart').show();
                         $('#checkoutButtonContainer').hide();
+                        $('#cartTotal').text('0.00');
                     } else {
                         $('#emptyCart').hide();
                         $('#checkoutButtonContainer').show();
                         
                         let cartHtml = '<div class="row">';
                         response.cart_items.forEach(item => {
-                            const itemTotal = item.total_price;
+                            const itemTotal = item.price * item.quantity;
                             total += itemTotal;
 
                             cartHtml += `
                                 <div class="col-md-4 mb-4">
                                     <div class="product-card h-100">
                                         <div class="product-image">
-                                            <img src="${item.image_url}" alt="${item.name}">
+                                            <img src="${item.image_url || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="${item.name}">
                                         </div>
                                         <div class="product-details d-flex flex-column justify-content-between">
                                             <div>
                                                 <h5 class="product-title"><i class="fas fa-gift me-2"></i>${item.name}</h5>
-                                                <p class="product-price"><i class="fas fa-tag me-2"></i>Base: ₹${item.base_price.toFixed(2)}</p>
-                                                <p class="product-price">GST: ₹${item.gst_amount.toFixed(2)}</p>
-                                                <p class="product-price">Total: ₹${item.total_price.toFixed(2)} x <span id="quantity-${item.id}">${item.quantity}</span></p>
+                                                <p class="product-price"><i class="fas fa-tag me-2"></i>Price: ₹${item.price.toFixed(2)}</p>
+                                                <p class="product-price">Quantity: <span id="quantity-${item.id}">${item.quantity}</span></p>
+                                                <p class="product-price">Total: ₹${itemTotal.toFixed(2)}</p>
                                             </div>
                                             <div class="mt-2">
                                                 <div class="d-flex justify-content-between align-items-center">
-                                                    <button class="btn btn-sm btn-outline-secondary" onclick="updateCartItemQuantity(${item.id}, ${item.quantity - 1})"><i class="fas fa-minus"></i></button>
-                                                    <span id="quantity-${item.id}">${item.quantity}</span>
+                                                    <button class="btn btn-sm btn-outline-secondary" onclick="updateCartItemQuantity(${item.id}, ${item.quantity - 1})" ${item.quantity <= 1 ? 'disabled' : ''}><i class="fas fa-minus"></i></button>
+                                                    <span>${item.quantity}</span>
                                                     <button class="btn btn-sm btn-outline-secondary" onclick="updateCartItemQuantity(${item.id}, ${item.quantity + 1})"><i class="fas fa-plus"></i></button>
                                                 </div>
                                                 <button class="btn btn-error btn-sm w-100 mt-2" onclick="removeFromCart(${item.id})">
                                                     <i class="fas fa-trash-alt me-1"></i>Remove
                                                 </button>
-                                                <button class="btn btn-success btn-sm w-100 mt-2" onclick="singleProductCheckout(${item.id})">
+                                                <button class="btn btn-success btn-sm w-100 mt-2" onclick="event.preventDefault(); singleProductCheckout(${item.product_id}, ${item.quantity})">
                                                     <i class="fas fa-shopping-cart me-1"></i>Buy Now
                                                 </button>
                                             </div>
@@ -224,96 +229,116 @@
                             `;
                         });
                         cartHtml += '</div>';
-                        cartItems.append(cartHtml);
+                        cartItems.html(cartHtml);
+                        $('#cartTotal').text(total.toFixed(2));
                     }
-
-                    $('#cartTotal').text(total.toFixed(2));
                 },
-                error: function(xhr, status, error) {
-                    console.error("Error fetching cart data:", status, error);
+                error: function(xhr) {
+                    console.error("Error fetching cart data:", xhr.responseText);
+                    alert("Error loading cart. Please refresh the page.");
                 }
             });
         }
 
-        function updateCartItemQuantity(productId, newQuantity) {
-            if (productId && newQuantity >= 0) {
+        function updateCartItemQuantity(cartItemId, newQuantity) {
+            if (cartItemId && newQuantity >= 0) {
                 $.ajax({
                     url: "{% url 'update_cart_quantity' %}",
                     method: "POST",
                     data: {
-                        product_id: productId,
+                        cart_item_id: cartItemId,
                         quantity: newQuantity,
                         csrfmiddlewaretoken: "{{ csrf_token }}"
                     },
                     success: function(response) {
                         if (response.success) {
                             updateCartDisplay();
-                            $(document).trigger('cartUpdated', {
-                                productId: productId,
-                                newInventory: response.new_inventory
-                            });
                         } else {
-                            alert("Error updating cart. Please try again.");
+                            alert(response.message || "Error updating cart. Please try again.");
                         }
                     },
-                    error: function() {
-                        alert("An unexpected error occurred. Please try again later.");
+                    error: function(xhr) {
+                        alert(xhr.responseJSON?.message || "An unexpected error occurred. Please try again later.");
                     }
                 });
-            } else {
-                console.error("Product ID is undefined or quantity is invalid");
             }
         }
 
-        function removeFromCart(productId) {
-            if (productId) {
+        function removeFromCart(cartItemId) {
+            if (cartItemId) {
+                if (!confirm('Are you sure you want to remove this item from your cart?')) {
+                    return;
+                }
+                
                 $.ajax({
                     url: "{% url 'remove_from_cart' %}",
                     method: "POST",
                     data: {
-                        product_id: productId,
+                        cart_item_id: cartItemId,
                         csrfmiddlewaretoken: "{{ csrf_token }}"
                     },
                     success: function(response) {
                         if (response.success) {
                             updateCartDisplay();
-                            $(document).trigger('cartUpdated', {
-                                productId: productId,
-                                newInventory: response.new_inventory
-                            });
                         } else {
-                            alert("Error removing item from cart. Please try again.");
+                            alert(response.message || "Error removing item from cart. Please try again.");
                         }
                     },
-                    error: function() {
-                        alert("An unexpected error occurred. Please try again later.");
+                    error: function(xhr) {
+                        alert(xhr.responseJSON?.message || "An unexpected error occurred. Please try again later.");
                     }
                 });
-            } else {
-                console.error("Product ID is undefined");
             }
         }
 
-        function singleProductCheckout(productId) {
-            const quantityElement = document.querySelector(`#quantity-${productId}`);
-            const quantity = quantityElement ? parseInt(quantityElement.textContent) : 1;
+        function singleProductCheckout(productId, quantity) {
+            if (!productId || !quantity) {
+                alert('Invalid product information');
+                return;
+            }
+
+            // Show loading state
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+            // Create form data
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            formData.append('quantity', quantity);
 
             $.ajax({
                 url: `/single-product-checkout/${productId}/`,
                 method: 'POST',
-                data: {
-                    csrfmiddlewaretoken: '{{ csrf_token }}',
-                    quantity: quantity
-                },
+                data: formData,
+                processData: false,
+                contentType: false,
                 success: function(response) {
-                    if (response.success) {
-                        window.location.href = response.checkout_url;
+                    if (response.session_id) {
+                        // Redirect to Stripe checkout
+                        return stripe.redirectToCheckout({
+                            sessionId: response.session_id
+                        }).then(function(result) {
+                            if (result.error) {
+                                alert(result.error.message);
+                            }
+                        });
+                    } else if (response.redirect_url) {
+                        window.location.href = response.redirect_url;
                     } else {
-                        alert('Error creating checkout session. Please try again.');
+                        throw new Error('Invalid response from server');
                     }
                 },
-                error: function() {
-                    alert('An unexpected error occurred. Please try again later.');
+                error: function(xhr) {
+                    console.error('Checkout error:', xhr.responseText);
+                    const errorMessage = xhr.responseJSON?.error || 'An error occurred during checkout. Please try again.';
+                    alert(errorMessage);
+                },
+                complete: function() {
+                    // Reset button state
+                    button.disabled = false;
+                    button.innerHTML = originalText;
                 }
             });
         }

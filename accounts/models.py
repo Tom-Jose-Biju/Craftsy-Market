@@ -11,6 +11,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 import io
 from django.conf import settings
+from django.db.models import Avg
 
 class User(AbstractUser):
     USER_TYPE_CHOICES = (
@@ -109,6 +110,44 @@ class Product(models.Model):
     def is_in_stock(self):
         return self.inventory > 0
 
+    @staticmethod
+    def get_product_category(predictions):
+        """Map model predictions to product categories"""
+        category_mappings = {
+            'jewelry': [
+                'necklace', 'bracelet', 'ring', 'earring', 'pendant', 'gemstone',
+                'gold', 'silver', 'metal', 'chain', 'bead', 'crystal', 'pearl',
+                'diamond', 'jewelry_box', 'jewelry_stand'
+            ],
+            'pottery': [
+                'vase', 'bowl', 'plate', 'cup', 'mug', 'ceramic', 'clay', 'pottery',
+                'earthenware', 'stoneware', 'porcelain', 'glaze', 'kiln', 'wheel',
+                'handbuilt', 'sculpted'
+            ],
+            'textiles': [
+                'fabric', 'cloth', 'textile', 'woven', 'knitted', 'embroidered',
+                'quilted', 'sewn', 'dyed', 'printed', 'pattern', 'fiber', 'thread',
+                'yarn', 'loom', 'needle'
+            ],
+            'woodwork': [
+                'wood', 'wooden', 'carved', 'furniture', 'box', 'frame', 'bowl',
+                'cutting_board', 'sculpture', 'turned', 'joinery', 'carpentry',
+                'woodworking', 'stained', 'varnished'
+            ],
+            'candles': [
+                'candle', 'wax', 'wick', 'scented', 'beeswax', 'soy_wax', 'paraffin',
+                'candlestick', 'candleholder', 'flame', 'melted', 'aromatherapy',
+                'fragrance', 'essential_oil', 'mold'
+            ]
+        }
+
+        # Check each prediction against the mappings
+        for pred in predictions:
+            for category, keywords in category_mappings.items():
+                if any(keyword in pred.lower() for keyword in keywords):
+                    return category
+        return 'other'  # Default category if no match found
+
     # def classify_image(self, image_file):
     #     print("Loading custom EfficientNet model...")
     #     model = tf.keras.models.load_model('custom_efficientnet_model.h5')
@@ -137,66 +176,6 @@ class Product(models.Model):
     #     print(f"Predicted category: {predicted_category}")
 
     #     return predicted_category
-
-    @staticmethod
-    def map_prediction_to_category(predictions):
-        # Define expanded mappings from ImageNet classes to your categories
-        category_mappings = {
-            'jewelry': [
-                'necklace', 'earring', 'ring', 'bangle', 'pendant', 'bracelet', 'anklet',
-                'brooch', 'tiara', 'cufflink', 'locket', 'charm', 'gemstone', 'pearl',
-                'gold', 'silver', 'platinum', 'diamond', 'ruby', 'sapphire', 'emerald'
-            ],
-            'pottery': [
-                'vase', 'pot', 'ceramic', 'earthenware', 'porcelain', 'bowl', 'plate',
-                'mug', 'teapot', 'jug', 'urn', 'planter', 'tile', 'figurine', 'sculpture',
-                'clay', 'terracotta', 'stoneware', 'raku', 'glaze', 'kiln'
-            ],
-            'woodworking': [
-                'wooden_spoon', 'chair', 'table', 'cabinet', 'wooden', 'bookshelf',
-                'cutting_board', 'bowl', 'box', 'frame', 'carving', 'sculpture',
-                'furniture', 'desk', 'bench', 'chest', 'dresser', 'stool', 'hardwood',
-                'softwood', 'plywood', 'veneer', 'lathe', 'chisel', 'saw'
-            ],
-            'painting': [
-                'paintbrush', 'canvas', 'acrylic_paint', 'oil_paint', 'watercolor',
-                'palette', 'easel', 'art', 'artwork', 'portrait', 'landscape', 'still_life',
-                'abstract', 'mural', 'fresco', 'gouache', 'tempera', 'pastel', 'charcoal',
-                'sketch', 'drawing', 'illustration', 'pigment', 'brushstroke'
-            ],
-            'textiles': [
-                'fabric', 'textile', 'quilt', 'embroidery', 'knitting', 'crochet', 'weaving',
-                'tapestry', 'rug', 'carpet', 'blanket', 'pillow', 'cushion', 'needlework',
-                'sewing', 'loom', 'yarn', 'thread', 'silk', 'wool', 'cotton', 'linen'
-            ],
-            'glasswork': [
-                'glass', 'stained_glass', 'blown_glass', 'vase', 'bowl', 'sculpture',
-                'window', 'lampwork', 'bead', 'mosaic', 'fused_glass', 'goblet', 'decanter',
-                'paperweight', 'chandelier', 'mirror', 'prism', 'crystal'
-            ],
-            'metalwork': [
-                'metal', 'sculpture', 'forging', 'welding', 'blacksmith', 'ironwork',
-                'copperwork', 'brasswork', 'silversmith', 'goldsmith', 'armor', 'sword',
-                'knife', 'tool', 'ornament', 'weathervane', 'gate', 'railing'
-            ],
-            'candles': [
-                'candle', 'wax', 'wick', 'taper', 'pillar', 'votive', 'tea_light',
-                'scented', 'beeswax', 'soy_wax', 'paraffin', 'candlestick', 'candleholder',
-                'flame', 'melted', 'aromatherapy', 'fragrance', 'essential_oil', 'mold'
-            ]
-        }
-
-        # Check each prediction against the mappings
-        for pred in predictions:
-            predicted_class = pred[1].lower()
-            print(f"Checking predicted class: {predicted_class}")
-            for category, related_classes in category_mappings.items():
-                if any(cls in predicted_class for cls in related_classes):
-                    print(f"Matched category: {category}")
-                    return category
-
-        print("No category match found, returning 'other'")
-        return 'other'  # Default category if no match is found
 
 class AuthenticityDocument(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='authenticity_documents')
@@ -237,6 +216,7 @@ class Review(models.Model):
 class Order(models.Model):
     STATUS_CHOICES = (
         ('processing', 'Processing'),
+        ('confirmed', 'Confirmed'),
         ('shipped', 'Shipped'),
         ('delivered', 'Delivered'),
         ('cancelled', 'Cancelled'),
@@ -245,11 +225,9 @@ class Order(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='processing')
+    shipping_address = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    shipped_at = models.DateTimeField(null=True, blank=True)
-    delivered_at = models.DateTimeField(null=True, blank=True)
-    tracking_number = models.CharField(max_length=50, null=True, blank=True)
 
     def __str__(self):
         return f"Order #{self.id} by {self.user.username}"
@@ -271,23 +249,32 @@ class Order(models.Model):
         return progress_map.get(self.status.lower(), 0)
 
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):
-        return f"{self.quantity}x {self.product.name} in Order #{self.order.id}"
+        return f"{self.quantity}x {self.product.name}"
 
 class Cart(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='cart')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return f"Cart for {self.user.username}"
+
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, related_name='items', on_delete=models.CASCADE)
-    product = models.ForeignKey('Product', on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        unique_together = ('cart', 'product')
+
+    def __str__(self):
+        return f"{self.quantity}x {self.product.name}"
 
 class Blog(models.Model):
     title = models.CharField(max_length=200)
@@ -322,7 +309,7 @@ class ChatMessage(models.Model):
         ordering = ['timestamp']
 
 class DeliveryPartner(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='delivery_partner')
     vehicle_type = models.CharField(max_length=50)
     vehicle_number = models.CharField(max_length=50)
     license_number = models.CharField(max_length=50)
@@ -341,6 +328,7 @@ class DeliveryPartner(models.Model):
     is_available = models.BooleanField(default=True)
     current_location_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     current_location_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.0, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -353,11 +341,18 @@ class DeliveryPartner(models.Model):
         self.save()
 
     def update_rating(self):
-        ratings = self.delivery_ratings.all()
-        if ratings:
-            avg_rating = sum(r.rating for r in ratings) / len(ratings)
-            self.rating = round(avg_rating, 2)
-            self.save()
+        # Get all ratings for deliveries assigned to this partner
+        ratings = DeliveryRating.objects.filter(delivery__delivery_partner=self)
+        
+        if ratings.exists():
+            # Calculate average rating
+            avg_rating = ratings.aggregate(avg=Avg('rating'))['avg']
+            # Update a rating field in the model (if it exists)
+            if hasattr(self, 'rating'):
+                self.rating = round(avg_rating, 2)
+                self.save(update_fields=['rating'])
+        
+        return avg_rating if 'avg_rating' in locals() else 0
 
 class Delivery(models.Model):
     STATUS_CHOICES = (
@@ -369,7 +364,7 @@ class Delivery(models.Model):
         ('failed', 'Failed'),
         ('cancelled', 'Cancelled')
     )
-
+    
     order = models.OneToOneField('Order', on_delete=models.CASCADE, related_name='delivery')
     delivery_partner = models.ForeignKey(DeliveryPartner, on_delete=models.SET_NULL, null=True, related_name='deliveries')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -377,63 +372,106 @@ class Delivery(models.Model):
     delivery_instructions = models.TextField(blank=True)
     expected_delivery_time = models.DateTimeField()
     actual_delivery_time = models.DateTimeField(null=True, blank=True)
+    destination_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True)
+    destination_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Delivery for Order #{self.order.id}"
+        return f"Delivery #{self.id} for Order #{self.order.id}"
 
     def get_delivery_time(self):
-        if self.actual_delivery_time and self.created_at:
-            time_diff = self.actual_delivery_time - self.created_at
-            return round(time_diff.total_seconds() / 3600, 1)  # Returns hours
-        return None
+        if self.actual_delivery_time:
+            return self.actual_delivery_time
+        return self.expected_delivery_time
 
     def mark_as_delivered(self):
-        if self.status != 'delivered':
-            self.status = 'delivered'
-            self.actual_delivery_time = timezone.now()
-            self.save()
+        self.status = 'delivered'
+        self.actual_delivery_time = timezone.now()
+        self.save()
             
-            # Update order status
-            self.order.status = 'delivered'
-            self.order.delivered_at = timezone.now()
-            self.order.save()
+        # Update order status
+        self.order.status = 'delivered'
+        self.order.delivered_at = timezone.now()
+        self.order.save()
             
-            # Update delivery partner availability
-            if self.delivery_partner:
-                self.delivery_partner.is_available = True
-                self.delivery_partner.save()
+        # Update delivery partner availability
+        if self.delivery_partner:
+            self.delivery_partner.is_available = True
+            self.delivery_partner.save()
 
 class DeliveryStatusHistory(models.Model):
-    delivery = models.ForeignKey(Delivery, on_delete=models.CASCADE, related_name='status_history')
-    status = models.CharField(max_length=20, choices=Delivery.STATUS_CHOICES)
+    """Enhanced delivery status tracking"""
+    DETAILED_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('assigned', 'Assigned to Delivery Partner'),
+        ('picked_up', 'Picked Up'),
+        ('in_transit', 'In Transit'),
+        ('out_for_delivery', 'Out for Delivery'),
+        ('delivered', 'Delivered'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled')
+    ]
+
+    delivery = models.ForeignKey(
+        'Delivery',
+        on_delete=models.CASCADE,
+        related_name='status_history'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=DETAILED_STATUS_CHOICES
+    )
     notes = models.TextField(blank=True)
+    location_lat = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True
+    )
+    location_lng = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True
+    )
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-timestamp']
+        verbose_name_plural = 'Delivery Status Histories'
 
     def __str__(self):
-        return f"Status update for Delivery #{self.delivery.id}: {self.status}"
+        return f"{self.delivery} - {self.get_status_display()} at {self.timestamp}"
+
+    def save(self, *args, **kwargs):
+        # Create notification for status update
+        if not self.pk:  # Only on creation
+            Notification.objects.create(
+                user=self.delivery.order.user,
+                title=f'Delivery Status Update',
+                message=f'Your delivery is now {self.get_status_display()}',
+            )
+        super().save(*args, **kwargs)
 
 class DeliveryRating(models.Model):
-    delivery = models.ForeignKey(Delivery, on_delete=models.CASCADE, related_name='ratings')
-    delivery_partner = models.ForeignKey(DeliveryPartner, on_delete=models.CASCADE, related_name='delivery_ratings')
+    delivery = models.ForeignKey('Delivery', on_delete=models.CASCADE, related_name='ratings')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['delivery', 'user']
+        unique_together = ('delivery', 'user')
 
     def __str__(self):
-        return f"Rating for {self.delivery} by {self.user.username}"
+        return f"Rating for delivery {self.delivery.id} by {self.user.username}"
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        self.delivery_partner.update_rating()
+        # Update the delivery partner's average rating when a rating is saved
+        if self.delivery and self.delivery.delivery_partner:
+            self.delivery.delivery_partner.update_rating()
 
 class DeliveryRoute(models.Model):
     delivery = models.ForeignKey(Delivery, on_delete=models.CASCADE, related_name='route_points')
@@ -513,3 +551,12 @@ class DeliveryEarning(models.Model):
             models.Index(fields=['delivery_partner', 'status']),
             models.Index(fields=['created_at']),
         ]
+
+class Wishlist(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='wishlist')
+    products = models.ManyToManyField(Product, related_name='wishlists')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Wishlist for {self.user.username}"

@@ -3,13 +3,16 @@ class NotificationManager {
     constructor() {
         this.unreadCount = 0;
         this.countBadge = document.getElementById('notification-count');
-        this.setupEventListeners();
-        this.updateUnreadCount();
+        this.setupMinimalPolling();
+        this.updateUnreadCount(); // Initial check only
     }
 
-    setupEventListeners() {
-        // Update unread count every minute
-        setInterval(() => this.updateUnreadCount(), 60000);
+    setupMinimalPolling() {
+        // Only check on dropdown open, no automatic polling
+        const dropdown = document.getElementById('notificationDropdown');
+        if (dropdown) {
+            dropdown.addEventListener('show.bs.dropdown', () => this.updateUnreadCount());
+        }
     }
 
     async updateUnreadCount() {
